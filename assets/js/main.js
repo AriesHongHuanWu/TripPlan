@@ -1185,6 +1185,16 @@ async function aiCreatePlan(text) {
   }
 }
 
+// From the HOME page: type a trip → enter the app's AI chat with the text auto-sent,
+// so the AI builds the whole trip live in the conversation (agent mode → plan_trip).
+function homeAiCreate(text) {
+  const t = (text || '').trim(); if (!t) return;
+  store.set('kp_entered', true);
+  const id = createPlan({ title: t.slice(0, 16) || 'AI 行程', model: blankModel({ title: 'AI 行程' }), base: 'custom' });
+  openPlan(id); goTab('ai');
+  setTimeout(() => { if (geminiCtl && geminiCtl.ask) geminiCtl.ask(t, { agent: true }); }, 380);
+}
+
 // ---- Sharing (Firebase if signed in, else Cloudflare KV) ----
 // Uploads the plan snapshot under a stable, revocable code stored on the plan meta,
 // so the same invite link keeps working and can be turned off later.
@@ -1552,6 +1562,15 @@ function init() {
   aci.addEventListener('input', () => { aci.style.height = 'auto'; aci.style.height = Math.min(100, aci.scrollHeight) + 'px'; });
   const aChips = $('#aiCreateChips');
   if (aChips) ['美食為主', '輕鬆慢步調', '親子友善', '行程排滿一點', '多拍照打卡點'].forEach(c => aChips.appendChild(el('button', { onclick: () => aiCreatePlan(c) }, c)));
+  // AI create-trip on HOME page → enters the app's AI chat with the text auto-sent
+  const hai = $('#homeAiInput');
+  if (hai) {
+    $('#homeAiBtn').addEventListener('click', () => { const v = hai.value; hai.value = ''; hai.style.height = 'auto'; homeAiCreate(v); });
+    hai.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#homeAiBtn').click(); } });
+    hai.addEventListener('input', () => { hai.style.height = 'auto'; hai.style.height = Math.min(100, hai.scrollHeight) + 'px'; });
+  }
+  const hChips = $('#homeAiChips');
+  if (hChips) ['5 天東京自由行', '6 天巴黎', '4 天首爾美食', '日本九州 8 天'].forEach(c => hChips.appendChild(el('button', { onclick: () => homeAiCreate(c) }, c)));
   // sheets
   $('#scrim').addEventListener('click', closeSheets);
   $('#sheetClose').addEventListener('click', closeSheets);
@@ -1605,7 +1624,7 @@ function init() {
   // initial screen: shared link → plans (loads into app); else app if returning, home if first time
   const hadShare = importSharedFromURL();
   if (hadShare) store.set('kp_entered', true);
-  showScreen(hadShare ? 'plans' : (store.get('kp_entered', false) ? 'app' : 'home'));
+  showScreen(hadShare ? 'plans' : 'home');   // always land on the home / login page
 }
 
 document.addEventListener('DOMContentLoaded', init);

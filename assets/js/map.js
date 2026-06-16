@@ -24,14 +24,35 @@ const RAIL = [
 let cityLayers = [];
 let onWeatherCb = null;
 
+// The leaflet-gesture-handling UMD exports its handler but (in plain-script mode)
+// doesn't auto-register on L.Map — so wire it up ourselves so `gestureHandling:true`
+// works: 1 finger scrolls the page, 2 fingers pan/zoom (Ctrl+wheel on desktop).
+function ensureGesture() {
+  try {
+    if (typeof L === 'undefined' || !L.Map) return;
+    if ('gestureHandling' in L.Map.prototype.options) return;   // already registered
+    const G = window.leafletGestureHandling;
+    const Handler = G && (G.GestureHandling || G.default);
+    if (Handler) {
+      L.Map.mergeOptions({ gestureHandling: false });
+      L.Map.addInitHook('addHandler', 'gestureHandling', Handler);
+    }
+  } catch {}
+}
+
 export function initMap(onWeather) {
   if (inited || typeof L === 'undefined') return;
   const elMap = document.getElementById('leafmap');
   if (!elMap) return;
   inited = true;
   onWeatherCb = onWeather;
+  ensureGesture();
 
-  map = L.map(elMap, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([20, 130], 4);
+  map = L.map(elMap, {
+    zoomControl: true, attributionControl: true, touchZoom: true, doubleClickZoom: true, dragging: true, tap: true,
+    gestureHandling: true,   // 1 finger scrolls the page; 2 fingers pan/zoom (Ctrl+wheel on desktop)
+    gestureHandlingOptions: { text: { touch: '請用雙指移動地圖', scroll: '請用 Ctrl + 滾輪縮放地圖', scrollMac: '請用 ⌘ + 滾輪縮放地圖' }, duration: 1500 },
+  }).setView([34.2, 133.0], 6);
   L.tileLayer(tileUrl(), {
     attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, subdomains: 'abcd',
   }).addTo(map);
@@ -42,9 +63,6 @@ export function initMap(onWeather) {
     const btn = node && node.querySelector('[data-wx]');
     if (btn) btn.addEventListener('click', () => onWeatherCb && onWeatherCb(btn.getAttribute('data-wx')));
   });
-
-  refreshMap();
-  setTimeout(() => map.invalidateSize(), 200);
 }
 
 // Clear + redraw all markers/polylines for the CURRENT trip (any country).
@@ -74,10 +92,18 @@ export function refreshMap(opts = {}) {
     });
   });
 
-  if (pts.length >= 2) map.fitBounds(pts, { padding: [40, 40], maxZoom: 12 });
-  else if (pts.length === 1) map.setView(pts[0], 11);
-  else map.setView([20, 0], 2);
-  setTimeout(() => { try { map.invalidateSize(); } catch {} }, 120);
+  // Fit AFTER invalidateSize so the container's real size is known (fixes the map
+  // being stuck zoomed-out when the route tab was just shown). Run twice: once now,
+  // once after layout settles, so the final framing is always correct.
+  const fit = () => {
+    if (!map) return;
+    try { map.invalidateSize(); } catch {}
+    if (pts.length >= 2) map.fitBounds(pts, { padding: [28, 28], maxZoom: 11 });
+    else if (pts.length === 1) map.setView(pts[0], 12);
+    else map.setView([20, 0], 2);
+  };
+  fit();
+  setTimeout(fit, 200);
 }
 
 export function refreshMapSize() { if (map) setTimeout(() => map.invalidateSize(), 60); }
@@ -86,10 +112,15 @@ export function refreshMapSize() { if (map) setTimeout(() => map.invalidateSize(
 let dayMap;
 export function renderDayMiniMap(elId, points) {
   if (typeof L === 'undefined') return;
+  ensureGesture();
   const elx = document.getElementById(elId); if (!elx) return;
   if (dayMap) { try { dayMap.remove(); } catch {} dayMap = null; }
   if (!points || !points.length) return;
-  dayMap = L.map(elx, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: true });
+  dayMap = L.map(elx, {
+    zoomControl: false, attributionControl: false, dragging: true, touchZoom: true,
+    gestureHandling: true,
+    gestureHandlingOptions: { text: { touch: '請用雙指移動地圖', scroll: '請用 Ctrl + 滾輪縮放地圖', scrollMac: '請用 ⌘ + 滾輪縮放地圖' }, duration: 1500 },
+  });
   L.tileLayer(tileUrl(), { subdomains: 'abcd', maxZoom: 18 }).addTo(dayMap);
   const latlngs = [];
   points.forEach((p, i) => {

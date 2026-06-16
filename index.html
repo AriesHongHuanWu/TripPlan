@@ -25,6 +25,8 @@
 <!-- Leaflet (map) from CDN — no API key needed -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<!-- Two-finger map control: 1 finger scrolls the page, 2 fingers pan/zoom the map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.css" />
 
 <link rel="stylesheet" href="assets/css/styles.css" />
 <script>/* capture the install prompt as early as possible (Android/desktop Chromium) */
@@ -99,6 +101,14 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
     <div class="home__eyebrow">AI TRIP PLANNER</div>
     <h1 class="home__title">Plan AI</h1>
     <p class="home__sub">用 AI 規劃旅程、自動雲端儲存，隨時調整、匯出 PDF 與同行者共享。</p>
+    <div class="ai-create" id="homeAiCreate" style="margin:18px 0 16px;text-align:left">
+      <div class="ai-create__head"><span class="ai-create__spark"><svg class="ic"><use href="#i-ai"/></svg></span><b>用 AI 規劃一趟旅程</b></div>
+      <div class="ai-create__field">
+        <textarea id="homeAiInput" rows="1" placeholder="想去哪、玩幾天？例如：5 天東京自由行，7/10 出發"></textarea>
+        <button class="send-btn" id="homeAiBtn" title="開始規劃"><svg><use href="#i-send"/></svg></button>
+      </div>
+      <div class="ai-create__chips" id="homeAiChips"></div>
+    </div>
     <div class="home__features" id="homeFeatures"></div>
     <button class="btn btn--block btn-google" id="googleSignIn">
       <svg class="gicon" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
@@ -308,6 +318,8 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
 <!-- Leaflet JS from CDN -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Gesture handling: two-finger pan/zoom on touch, Ctrl+wheel on desktop -->
+<script src="https://unpkg.com/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.js" crossorigin=""></script>
 
 <!-- App (ES modules) -->
 <script type="module" src="assets/js/main.js"></script>
