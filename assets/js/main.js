@@ -7,7 +7,7 @@ import {
   el, clear, icon, $, $$, toast, pad2, ymd, parseHM, nowMinutes,
   haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC,
 } from './util.js';
-import { renderWeatherCity } from './weather.js';
+import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.js';
 import { initMap, refreshMapSize, focusPlace, jrSchematicHTML } from './map.js';
 import { initGemini, getCfg } from './gemini.js';
 
@@ -38,6 +38,7 @@ function goTab(tab) {
   $$('.tab').forEach(t => t.classList.toggle('is-active', t.dataset.tab === tab));
   if (tab === 'route') { ensureMap(); refreshMapSize(); }
   if (tab === 'today') renderToday();
+  if (tab === 'weather') renderWeatherHero();
   window.scrollTo({ top: 0 });
 }
 
@@ -134,14 +135,14 @@ function renderToday() {
     el('.row', { id: 'todayWxLine', style: { marginTop: '8px', gap: '12px' } }, [el('.skeleton', { style: { height: '24px', width: '160px' } })]),
   ]);
   root.appendChild(wxCard);
-  import('./weather.js').then(({ getCurrentSummary }) => getCurrentSummary(city.key).then(w => {
+  getCurrentSummary(city.key).then(w => {
     const line = $('#todayWxLine'); if (!line || !w) return; clear(line);
     line.appendChild(el('div', { style: { fontSize: '26px' }, text: w.emoji }));
     line.appendChild(el('div', {}, [
       el('div', { style: { fontWeight: '700', fontSize: '18px' }, text: `${w.temp}° ${w.label}` }),
       el('.tiny.muted', { text: `${w.lo}° / ${w.hi}° · 降雨 ${w.rainProb}% · 濕度 ${w.humidity}%` }),
     ]));
-  }));
+  });
 
   // Today timeline (compact)
   const tl = el('.card.card--pad', { style: { marginTop: '14px' } }, [
@@ -317,6 +318,47 @@ function passTable() {
 
 // ---------- Weather page ----------
 let wxCity = 'kumamoto';
+
+// Today's planned location + its weather + outfit advice
+async function renderWeatherHero() {
+  const host = $('#wxTodayHero'); if (!host) return;
+  const s = computeNow();
+  const city = cityByKey[s.day.weatherKey] || cityByKey[s.day.cityKey];
+  clear(host); host.appendChild(el('.skeleton', { style: { height: '210px', borderRadius: '28px' } }));
+  const w = await getCurrentSummary(city.key);
+  clear(host);
+  if (!w) { host.appendChild(el('.card.card--pad', {}, [el('.muted', { text: '今日天氣載入失敗，稍後再試。' })])); return; }
+  const adv = clothingAdvice(w);
+  const grad = w.rainProb >= 50 ? 'linear-gradient(160deg,#475569,#334155)'
+    : w.temp >= 28 ? 'linear-gradient(160deg,#0284c7,#38bdf8 60%,#7dd3fc)'
+      : 'linear-gradient(160deg,#3b56d6,#5b8def)';
+  const dayLabel = s.phase === 'before' ? '首日預計在' : s.phase === 'after' ? '旅程最後在' : `今天 · Day ${s.dayIndex + 1} 預計在`;
+  const overlayBtn = { style: { borderColor: 'rgba(255,255,255,.45)', color: '#fff', background: 'rgba(255,255,255,.16)' } };
+  host.appendChild(el('.wx-today', {}, [
+    el('.wx-today__bg', { style: { background: grad } }),
+    el('.wx-today__body', {}, [
+      el('.wx-today__eyebrow', {}, [icon('i-pin'), dayLabel]),
+      el('.wx-today__where', { text: `${city.flag} ${city.name}` }),
+      el('.wx-today__now', {}, [
+        el('.wx-today__emoji', { text: w.emoji }),
+        el('div', {}, [
+          el('.wx-today__temp', { text: `${w.temp}°` }),
+          el('.wx-today__meta', { text: `${w.label} · 體感 ${w.feels}° · ${w.lo}° / ${w.hi}° · 降雨 ${w.rainProb}%` }),
+        ]),
+      ]),
+      adv ? el('.wx-today__wear', {}, [
+        el('.wx-today__wear-h', {}, [icon('i-bag'), `建議穿搭 · ${adv.band}`]),
+        el('.wear-chips', {}, adv.items.map(it => el('.wear-chip', {}, [el('span', { text: it.e }), it.t]))),
+        el('.wx-today__tip', { text: '💡 ' + adv.tip }),
+      ]) : null,
+      el('.row.wrap', { style: { marginTop: '14px', gap: '8px' } }, [
+        el('a.gmap-btn', { href: gmapHotels(city.lat, city.lng), target: '_blank', rel: 'noopener', ...overlayBtn }, ['🏨 今晚住宿']),
+        el('button.gmap-btn', { onclick: () => goWeather(city.key), ...overlayBtn }, [icon('i-weather'), '看完整預報']),
+      ]),
+    ]),
+  ]));
+}
+
 function buildWeatherPicker() {
   const p = $('#wxCityPick'); clear(p);
   CITIES.forEach(c => p.appendChild(el('.chip.chip--tap' + (c.key === wxCity ? '.is-on' : ''), { onclick: () => goWeather(c.key) }, [c.flag + ' ' + c.name.split(' ')[0]])));
@@ -466,6 +508,7 @@ function init() {
   buildRoutePages();
   buildWeatherPicker();
   buildGiftPicker(); renderGifts();
+  renderWeatherHero();
   renderWeatherCity(wxCity, $('#wxRoot'));
 
   // gemini with control API
@@ -475,7 +518,7 @@ function init() {
   });
 
   // clock — refresh Today every minute
-  setInterval(() => { if (currentTab === 'today') renderToday(); }, 60000);
+  setInterval(() => { if (currentTab === 'today') renderToday(); if (currentTab === 'weather') renderWeatherHero(); }, 60000);
 
   // service worker (offline / installable)
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

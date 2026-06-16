@@ -123,6 +123,25 @@ export async function renderWeatherCity(cityKey, root) {
   root.appendChild(dayCard);
 }
 
+// Clothing / packing advice from a weather summary (rainy-season aware)
+export function clothingAdvice(s) {
+  if (!s) return null;
+  const hi = s.hi, lo = s.lo, rain = s.rainProb ?? 0, items = [];
+  let band;
+  if (hi >= 31) { band = '炎熱'; items.push({ e: '👕', t: '短袖透氣衣' }, { e: '🧴', t: '防曬' }, { e: '🧢', t: '帽子/陽傘' }, { e: '💧', t: '勤補水' }); }
+  else if (hi >= 27) { band = '溫暖偏熱'; items.push({ e: '👕', t: '短袖' }, { e: '🧴', t: '防曬' }, { e: '🕶️', t: '太陽眼鏡' }); }
+  else if (hi >= 23) { band = '舒適'; items.push({ e: '👕', t: '短袖/薄長袖' }, { e: '🧥', t: '薄外套備用' }); }
+  else if (hi >= 18) { band = '微涼'; items.push({ e: '👔', t: '長袖' }, { e: '🧥', t: '薄外套' }); }
+  else { band = '偏涼'; items.push({ e: '🧥', t: '保暖外套' }, { e: '🧣', t: '可加圍巾' }); }
+  if (hi - lo >= 8) items.push({ e: '🌡️', t: '早晚溫差大' });
+  if (rain >= 60) items.push({ e: '☔', t: '雨傘/雨衣' }, { e: '👟', t: '防水好走鞋' });
+  else { if (rain >= 25) items.push({ e: '🌂', t: '折疊傘備用' }); items.push({ e: '👟', t: '好走的鞋' }); }
+  let tip = `高溫 ${hi}°、低溫 ${lo}°，降雨機率 ${rain}%。`;
+  if (rain >= 50) tip += '梅雨季有雨，務必帶傘並穿防水鞋。';
+  else tip += '梅雨季悶熱潮濕，建議透氣排汗衣物、隨身帶傘。';
+  return { band, items, tip };
+}
+
 // Compact current weather for the Today page + Gemini tool
 export async function getCurrentSummary(cityKey) {
   const city = cityByKey[cityKey] || CITIES[0];
