@@ -43,9 +43,45 @@ function goTab(tab) {
   if (tab === 'today') renderToday();
   if (tab === 'weather') renderWeatherHero();
   if (tab === 'plan' && curDayPts.length) renderDayMiniMap('dayMiniMap', curDayPts);
-  const sec = $('#page-' + tab);
-  if (sec && !reduceMotion()) sec.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  moveTabIndicator(tab);
+  animateIn(tab);
   window.scrollTo({ top: 0 });
+}
+
+// staggered entrance of a page's content blocks
+function animateIn(tab) {
+  if (reduceMotion()) return;
+  const sec = $('#page-' + tab); if (!sec) return;
+  const set = new Set();
+  sec.querySelectorAll(':scope > *').forEach(n => set.add(n));
+  sec.querySelectorAll('#todayRoot > *, #dayDetail > *, #wxRoot > *, #wxTodayHero > *, #giftRoot > *, #routeTripsWrap > *, #routePassWrap > *').forEach(n => set.add(n));
+  ['todayRoot', 'dayDetail', 'wxRoot', 'giftRoot', 'wxTodayHero'].forEach(id => { const e = document.getElementById(id); if (e) set.delete(e); });
+  let i = 0;
+  set.forEach(b => {
+    b.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 400, delay: Math.min(i, 9) * 42, easing: 'cubic-bezier(.2,.85,.25,1)', fill: 'backwards' });
+    i++;
+  });
+}
+
+// sliding active-tab indicator
+function moveTabIndicator(tab) {
+  const bar = $('#tabbar'), ind = $('#tabind'); if (!bar || !ind) return;
+  const btn = bar.querySelector(`.tab[data-tab="${tab}"]`); if (!btn) return;
+  const w = Math.max(20, btn.offsetWidth * 0.4);
+  ind.style.width = w + 'px';
+  ind.style.transform = `translateX(${btn.offsetLeft + (btn.offsetWidth - w) / 2}px)`;
+}
+
+// ease-out count-up for numbers (timer-based for reliability)
+function countUp(node, to, dur = 850) {
+  if (reduceMotion()) { node.textContent = to + '%'; return; }
+  const steps = Math.max(1, Math.round(dur / 30)); let i = 0;
+  const t = setInterval(() => {
+    i++; const p = i / steps;
+    node.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))) + '%';
+    if (i >= steps) { node.textContent = to + '%'; clearInterval(t); }
+  }, 30);
 }
 
 // ---------- Now / status ----------
@@ -182,12 +218,17 @@ function renderCommandCard(s) {
   const nxt = s.next;
   let countTxt = '今日行程已完成';
   if (nxt) { const m = parseHM(nxt.time) - s.nm; countTxt = m > 60 ? `還有 ${Math.floor(m / 60)} 小時 ${m % 60} 分` : `還有 ${Math.max(0, m)} 分鐘`; }
+  const ringFill = el('.ring__fill');
+  const pctNode = el('.ring__pct', { text: '0%' });
+  const progFill = el('.dayprog__fill', { style: { width: '0%' } });
+  setTimeout(() => {
+    ringFill.style.setProperty('--pct', String(pct * 3.6));
+    progFill.style.width = pct + '%';
+    countUp(pctNode, pct, 900);
+  }, 40);
   return el('.card.card--pad', { style: { marginTop: '14px' } }, [
     el('.cmd', {}, [
-      el('.ring', {}, [
-        el('.ring__fill', { style: { background: `conic-gradient(var(--brand-2) ${pct * 3.6}deg, var(--surface-3) 0)` } }),
-        el('.ring__hole', {}, [el('.ring__pct', { style: { animation: 'popIn .4s var(--ease)' }, text: pct + '%' }), el('.ring__lbl', { text: '今日進度' })]),
-      ]),
+      el('.ring', {}, [ringFill, el('.ring__hole', {}, [pctNode, el('.ring__lbl', { text: '今日進度' })])]),
       el('div', { style: { minWidth: '0' } }, [
         el('.cmd__next-lbl', { text: nxt ? '下一步' : '狀態' }),
         el('.cmd__next-title', { text: nxt ? `${nxt.time} ${nxt.title}` : '今日完成 🛏️' }),
@@ -195,7 +236,7 @@ function renderCommandCard(s) {
         nxt && nxt.lat ? el('a.btn.btn--brand.btn--sm', { href: lastPos ? gmapDir(`${lastPos.lat},${lastPos.lng}`, `${nxt.lat},${nxt.lng}`, 'transit') : gmapPlace(nxt.title, nxt.lat, nxt.lng), target: '_blank', rel: 'noopener', style: { marginTop: '10px' } }, [icon('i-pin'), '導航前往']) : null,
       ]),
     ]),
-    el('.dayprog', {}, [el('.dayprog__fill', { style: { width: pct + '%' } })]),
+    el('.dayprog', {}, [progFill]),
   ]);
 }
 
@@ -643,6 +684,11 @@ function init() {
   initToolkit({ showOnMap });
   initRipples();
   hideSplash();
+  const placeInd = () => moveTabIndicator(currentTab);
+  requestAnimationFrame(placeInd);
+  window.addEventListener('load', placeInd);
+  setTimeout(placeInd, 600);
+  window.addEventListener('resize', placeInd);
 
   // clock — refresh Today every minute
   setInterval(() => { if (currentTab === 'today') renderToday(); if (currentTab === 'weather') renderWeatherHero(); }, 60000);

@@ -52,6 +52,7 @@
 
   --ease: cubic-bezier(.2,.8,.2,1);
   --ease-in: cubic-bezier(.4,0,1,1);
+  --spring: cubic-bezier(.34,1.56,.4,1);
   --font: "Google Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "Noto Sans TC", "Noto Sans JP", "PingFang TC", "Microsoft JhengHei", Roboto, sans-serif;
 
@@ -200,9 +201,12 @@ main {
 .tab__icon { display: grid; place-items: center; width: 56px; height: 30px; border-radius: var(--r-pill); transition: background .25s var(--ease); }
 .tab.is-active { color: var(--brand-2); }
 [data-theme="dark"] .tab.is-active { color: #8ab4ff; }
-.tab.is-active .tab__icon { background: color-mix(in srgb, var(--brand-2) 16%, transparent); }
-.tab.is-active svg { transform: translateY(-1px) scale(1.05); }
-.tab:active svg { transform: scale(.88); }
+.tab.is-active .tab__icon { background: color-mix(in srgb, var(--brand-2) 13%, transparent); transform: translateY(-1px); }
+.tab:active svg { transform: scale(.86); }
+/* sliding active indicator */
+.tabind { position: absolute; top: 0; left: 0; height: 3px; border-radius: 0 0 4px 4px; background: var(--brand-2); width: 24px;
+  transform: translateX(-100px); transition: transform .42s var(--spring), width .42s var(--spring); will-change: transform, width; }
+[data-theme="dark"] .tabind { background: #8ab4ff; }
 
 /* ---------- Typography helpers ------------------------------------------- */
 .h-display { font-size: 24px; font-weight: 700; letter-spacing: -.022em; line-height: 1.18; }
@@ -541,7 +545,10 @@ main {
    ====================================================================== */
 .cmd { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: center; }
 .ring { position: relative; width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; }
-.ring__fill { position: absolute; inset: 0; border-radius: 50%; }
+@property --pct { syntax: '<number>'; inherits: false; initial-value: 0; }
+.ring__fill { position: absolute; inset: 0; border-radius: 50%; --pct: 0;
+  background: conic-gradient(var(--brand-2) calc(var(--pct) * 1deg), var(--surface-3) 0);
+  transition: --pct .95s var(--ease); }
 .ring__hole { position: absolute; inset: 8px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; }
 .ring__pct { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
 .ring__lbl { font-size: 9.5px; font-weight: 700; color: var(--text-3); letter-spacing: .08em; }
