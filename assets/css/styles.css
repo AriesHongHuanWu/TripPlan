@@ -17,6 +17,8 @@
   --grad-sakura: linear-gradient(145deg, #e0496b, #c83a5c);  /* single-hue */
   --grad-gold: linear-gradient(145deg, #d4a017, #b8860b);
   --grad-aurora: radial-gradient(820px 420px at 50% -16%, rgba(79,70,229,.045), transparent 62%);
+  --hero-bg: linear-gradient(155deg, #2b2e39 0%, #191b22 100%);  /* refined ink masthead */
+  --hero-accent: #aeb6ee;
 
   /* Light theme surfaces — clean, neutral */
   --bg: #f6f7f9;
@@ -75,6 +77,8 @@
   --shadow-3: 0 16px 38px rgba(0,0,0,.5);
   --shadow-pop: 0 22px 56px rgba(0,0,0,.6);
   --grad-aurora: radial-gradient(820px 420px at 50% -16%, rgba(99,102,241,.09), transparent 62%);
+  --hero-bg: linear-gradient(155deg, #1c1e26 0%, #0f1117 100%);
+  --hero-accent: #a5b4fc;
 }
 
 /* ---------- Reset --------------------------------------------------------- */
@@ -198,9 +202,9 @@ main {
 .tab:active svg { transform: scale(.88); }
 
 /* ---------- Typography helpers ------------------------------------------- */
-.h-display { font-size: 26px; font-weight: 700; letter-spacing: -.01em; line-height: 1.2; }
-.h-section { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
-.h-card { font-size: 17px; font-weight: 650; letter-spacing: -.005em; }
+.h-display { font-size: 24px; font-weight: 700; letter-spacing: -.022em; line-height: 1.18; }
+.h-section { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); }
+.h-card { font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
 .muted { color: var(--text-2); }
 .muted-3 { color: var(--text-3); }
 .tiny { font-size: 12px; }
@@ -226,19 +230,19 @@ main {
 /* Hero card */
 .hero {
   position: relative; border-radius: var(--r-xl); overflow: hidden;
-  color: #fff; padding: 20px; box-shadow: var(--shadow-3);
-  background: var(--grad-brand);
+  color: #fff; padding: 22px; box-shadow: var(--shadow-2);
+  background: var(--hero-bg);
 }
 .hero::before {
   content:""; position:absolute; inset:0;
-  background: radial-gradient(540px 240px at 96% -12%, rgba(255,255,255,.16), transparent 62%);
+  background: radial-gradient(520px 240px at 100% -16%, rgba(255,255,255,.07), transparent 60%);
 }
 .hero > * { position: relative; }
-.hero__eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .9; }
-.hero__title { font-size: 28px; font-weight: 800; letter-spacing: -.01em; margin-top: 6px; line-height: 1.12; }
-.hero__meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; font-weight: 600; }
-.hero__meta span { display: inline-flex; align-items: center; gap: 6px; opacity: .95; }
-.hero__meta svg { width: 16px; height: 16px; }
+.hero__eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--hero-accent); }
+.hero__title { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-top: 8px; line-height: 1.14; }
+.hero__meta { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; font-size: 13px; font-weight: 500; }
+.hero__meta span { display: inline-flex; align-items: center; gap: 6px; color: rgba(255,255,255,.72); }
+.hero__meta svg { width: 15px; height: 15px; opacity: .8; }
 
 /* Chips */
 .chip {
@@ -289,19 +293,18 @@ main {
 .gmap-btn svg { width: 15px; height: 15px; }
 
 /* ---------- Today / Now banner ------------------------------------------- */
-.nowcard { position: relative; border-radius: var(--r-xl); overflow: hidden; box-shadow: var(--shadow-3); }
-.nowcard__bg { position:absolute; inset:0; background: var(--grad-sakura); opacity:.96; }
-.nowcard__bg::after { content:""; position:absolute; inset:0; background: radial-gradient(500px 200px at 90% -20%, rgba(255,255,255,.35), transparent 60%); }
-.nowcard__body { position: relative; padding: 18px; color: #fff; }
-.nowcard__label { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .92; display:flex; align-items:center; gap:8px; }
-.nowcard__title { font-size: 21px; font-weight: 800; margin-top: 6px; line-height: 1.2; }
-.nowcard__time { font-size: 13px; font-weight: 600; opacity: .95; margin-top: 4px; display:flex; align-items:center; gap:6px; }
-.nowcard__next { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.25); font-size: 13px; }
-.nowcard__next b { font-weight: 700; }
+.nowcard { position: relative; border-radius: var(--r-xl); overflow: hidden; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); }
+.nowcard__bg { display: none; }
+.nowcard__body { position: relative; padding: 18px; color: var(--text); }
+.nowcard__label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--sakura); display:flex; align-items:center; gap:8px; }
+.nowcard__title { font-size: 20px; font-weight: 700; letter-spacing: -.01em; margin-top: 8px; line-height: 1.2; }
+.nowcard__time { font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 5px; display:flex; align-items:center; gap:6px; }
+.nowcard__next { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
+.nowcard__next b { font-weight: 700; color: var(--text); }
 
 /* Live dot */
-.livedot { width: 7px; height: 7px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0 rgba(255,255,255,.7); animation: ring 1.8s infinite; display:inline-block; }
-@keyframes ring { 0%{box-shadow:0 0 0 0 rgba(255,255,255,.6)} 70%{box-shadow:0 0 0 8px rgba(255,255,255,0)} 100%{box-shadow:0 0 0 0 rgba(255,255,255,0)} }
+.livedot { width: 7px; height: 7px; border-radius: 50%; background: var(--sakura); box-shadow: 0 0 0 0 rgba(224,73,107,.6); animation: ring 1.8s infinite; display:inline-block; }
+@keyframes ring { 0%{box-shadow:0 0 0 0 rgba(224,73,107,.5)} 70%{box-shadow:0 0 0 7px rgba(224,73,107,0)} 100%{box-shadow:0 0 0 0 rgba(224,73,107,0)} }
 
 /* ---------- Timeline (itinerary) ----------------------------------------- */
 .daypick { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: none; }

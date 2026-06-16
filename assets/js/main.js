@@ -121,9 +121,9 @@ function renderToday() {
       const distTxt = lastPos && nxt.lat ? ` · ${fmtDistance(haversineKm(lastPos, { lat: nxt.lat, lng: nxt.lng }))}` : '';
       body.push(el('.nowcard__next', {}, [
         el('div', { html: `接下來 <b>${nxt.time}</b>：<b>${nxt.title}</b>${distTxt}` }),
-        nxt.lat ? el('a.btn.btn--sm', {
+        nxt.lat ? el('a.btn.btn--brand.btn--sm', {
           href: lastPos ? gmapDir(`${lastPos.lat},${lastPos.lng}`, `${nxt.lat},${nxt.lng}`, 'transit') : gmapPlace(nxt.title, nxt.lat, nxt.lng),
-          target: '_blank', rel: 'noopener', style: { marginTop: '10px', background: 'rgba(255,255,255,.2)', color: '#fff', border: 'none' },
+          target: '_blank', rel: 'noopener', style: { marginTop: '12px' },
         }, [icon('i-pin'), '導航前往']) : null,
       ]));
     } else {
@@ -570,6 +570,7 @@ function requestLocation(auto) {
   if (!navigator.geolocation) { if (!auto) toast('此裝置不支援定位'); return; }
   navigator.geolocation.getCurrentPosition(p => {
     lastPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+    const lb = $('#locBtn'); if (lb) lb.classList.add('iconbtn--live');
     if (!auto) toast('已更新你的位置');
     if (currentTab === 'today') renderToday();
   }, err => { if (!auto) toast('無法取得位置：' + err.message); }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });

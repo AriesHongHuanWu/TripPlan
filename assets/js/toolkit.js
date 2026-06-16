@@ -47,7 +47,7 @@ function renderHome() {
   b.appendChild(el('p', { class: 'tiny muted', style: { margin: '0 2px 14px' }, text: '旅途中需要的一切，一鍵搞定。' }));
   b.appendChild(el('.tk-grid', {}, TILES.map(tl =>
     el('button.tk-tile', { onclick: () => renderTool(tl.key) }, [
-      el('.tk-tile__ico', { style: { background: `color-mix(in srgb, ${tl.bg} 16%, transparent)`, color: tl.bg }, text: tl.emoji }),
+      el('.tk-tile__ico', { style: { background: 'var(--surface-2)' }, text: tl.emoji }),
       el('.tk-tile__t', { text: tl.t }),
       el('.tk-tile__d', { text: tl.d }),
     ])
