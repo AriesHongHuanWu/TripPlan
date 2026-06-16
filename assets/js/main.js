@@ -1288,6 +1288,11 @@ async function openShareSheet(id) {
       ? el('button.btn', { onclick: () => navigator.share({ title: m ? m.title : '我的行程', text: '一起看我的旅行行程吧！', url: link }).catch(() => {}) }, [icon('i-share'), '系統分享…'])
       : el('button.btn', { onclick: async () => { try { await navigator.clipboard.writeText(code); toast('已複製分享碼 ' + code); } catch {} } }, [icon('i-copy'), '複製分享碼']),
   ]));
+  // ready-to-paste invite message (LINE / messages)
+  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: async () => {
+    const msg = `一起來看「${m ? m.title : '這趟旅行'}」的行程吧！用 Plan AI 打開就能看每日行程、地圖與天氣：\n${link}`;
+    try { await navigator.clipboard.writeText(msg); toast('已複製邀請訊息，貼到 LINE／訊息即可'); } catch { linkIn.select(); toast('請長按複製連結'); }
+  } }, [icon('i-share'), '複製邀請訊息（含連結）']));
 
   // QR — friend can scan to open instantly (needs internet to render the QR image)
   b.appendChild(el('.tiny.muted-3', { style: { margin: '16px 0 8px' }, text: '或讓朋友掃這個 QR 碼：' }));
