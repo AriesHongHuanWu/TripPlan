@@ -28,6 +28,9 @@
 - **雲端同步（選用 · Cloudflare KV）**：用分享碼把行程存到雲端，換裝置或與同行者用同一組碼共用（見下方設定）。
 - **多計劃平台**：主頁（登入/介紹）→ 計劃頁（你的所有行程＋九州**範本**）→ 行程 App。點範本會**複製**一份新的可編輯行程，**範本本身不變**；可重新命名、刪除、分享。
 - **Google 登入 + 自動雲端儲存（Firebase）**：登入後行程自動存到你的帳號、跨裝置同步；未設定/未登入則以本機（訪客）模式運作，功能不受影響。AI 也能直接「建立新計劃」並編輯。
+- **主頁 AI 建立行程**：在「計劃」頁描述你想要的旅程（美食 / 輕鬆 / 親子…），AI 會建立一份並直接幫你調整好。
+- **離線可用（PWA）**：App 殼、地圖元件、字型、Firebase SDK 與最後一次天氣都會快取，沒網路也能開啟、看行程、編輯（連線後再同步）。
+- **通知**：行程提醒 / 下一個行程 / 車次 / AI 完成等**本地通知**（首次進入會詢問授權、可分項開關）；App 關著也收到的**伺服器推播**見下方設定。
 
 ## 🧱 技術
 
@@ -111,6 +114,16 @@ GEMINI_MODEL=gemini-flash-latest
 ```
 
 ---
+
+### 通知推播（App 關著也能收到）
+前端已能接收通知並註冊裝置 token（存於 Firestore `users/{uid}.fcmTokens`）。要在 App 關閉時主動推送，需後端發送 —— 已附 `functions/api/push.js`（FCM HTTP v1，純 Web Crypto 簽 JWT，無相依）：
+1. Firebase → 專案設定 → 服務帳戶 → **產生新的私密金鑰**（並**撤銷舊的/外洩的**）。
+2. Cloudflare Pages → Settings → Variables and Secrets，新增 **Secret**：
+   - `FIREBASE_SERVICE_ACCOUNT` = 整份服務帳戶 JSON（單行）
+   - `PUSH_KEY` = 一組隨機字串（保護此端點）
+3. 由你的伺服器/排程呼叫 `POST /api/push`，body `{ tokens, title, body, appKey }`。
+> ⚠️ 服務帳戶私鑰是機密，**只放 Cloudflare Secret，切勿 commit / 放前端**。
+> 自動觸發（排程行程提醒、共享聊天通知）需再加排程：**Cloudflare Worker Cron** 或 **Firebase Cloud Functions（Firestore 觸發）** —— 可再請我加上。
 
 ## ⚠️ 重要說明
 - **車次與票價為參考值**（依官方/權威來源整理），出發前請以即時 **Google Maps / JR 官方**為準 — App 內每段交通都已內建即時連結。

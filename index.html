@@ -92,7 +92,10 @@
     <h1 class="home__title">旅程規劃師</h1>
     <p class="home__sub">登入後自動儲存每一份行程，隨時用 AI 旅伴調整、與同行者共享。</p>
     <div class="home__features" id="homeFeatures"></div>
-    <button class="btn btn--brand btn--block" id="googleSignIn"><svg class="ic"><use href="#i-user"/></svg> 使用 Google 登入</button>
+    <button class="btn btn--block btn-google" id="googleSignIn">
+      <svg class="gicon" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      使用 Google 帳號登入
+    </button>
     <button class="btn btn--block" id="guestEnter" style="margin-top:10px">先試用（不登入）</button>
     <p class="tiny muted-3" id="homeNote" style="margin-top:14px; text-align:center"></p>
   </div>
@@ -114,6 +117,14 @@
   </header>
   <main class="plans-main">
     <div class="section-head" style="margin-top:4px"><h1 class="h-display">行程計劃</h1></div>
+    <div class="ai-create">
+      <div class="ai-create__head"><span class="ai-create__spark"><svg class="ic"><use href="#i-ai"/></svg></span><b>用 AI 建立行程</b></div>
+      <div class="ai-create__field">
+        <textarea id="aiCreateInput" rows="1" placeholder="描述你想要的旅程，例如：想多吃美食、想輕鬆一點、第一天加溫泉…"></textarea>
+        <button class="send-btn" id="aiCreateBtn" title="建立"><svg><use href="#i-send"/></svg></button>
+      </div>
+      <div class="ai-create__chips" id="aiCreateChips"></div>
+    </div>
     <div id="plansList" class="stagger"></div>
     <div class="section-head" style="margin-top:24px"><h2 class="h-section">從範本建立新行程</h2></div>
     <div id="templateList"></div>

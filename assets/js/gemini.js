@@ -190,9 +190,14 @@ async function send(scroll, input) {
 }
 
 const SUGGESTIONS = [
-  '我現在該做什麼？', '明天怎麼去廣島？', '帶我看熊本城在哪',
-  '今天天氣如何？', '第5天太累，幫我把屋島拿掉',
-  '幫我把宮島改到上午', '幫我找廣島站附近的飯店',
+  '我現在該做什麼？',
+  '幫我把今天排得輕鬆一點',
+  '第 5 天太累，幫我把屋島拿掉',
+  '把宮島改到上午看大鳥居',
+  '今天要帶傘嗎？',
+  '這趟必買伴手禮推薦',
+  '幫我找今晚住宿',
+  '下雨了，幫我改成室內景點',
 ];
 
 export function initGemini(api) {
@@ -236,5 +241,9 @@ export function initGemini(api) {
     micBtn.style.display = 'none';
   }
 
-  return { setModelLabel: () => { if (modelLabel) modelLabel.textContent = (getCfg().key ? '直連 · ' : '') + 'Gemini Flash 3.0'; } };
+  return {
+    setModelLabel: () => { if (modelLabel) modelLabel.textContent = (getCfg().key ? '直連 · ' : '') + 'Gemini Flash 3.0'; },
+    setAgent,
+    ask: (text, opts = {}) => { if (opts.agent) setAgent(true); input.value = text; input.dispatchEvent(new Event('input')); send(scroll, input); },
+  };
 }

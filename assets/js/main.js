@@ -912,6 +912,17 @@ function renamePlan(id, title) { const arr = plansMeta(); const m = arr.find(p =
 // AI creates a new plan then jumps to chat to arrange it
 function aiNewPlan(title) { const id = createPlan({ title: title || '新行程' }); openPlan(id); goTab('ai'); toast('已建立新行程，跟 AI 說你想怎麼安排'); return { ok: true, msg: '已建立新行程「' + (title || '新行程') + '」並開啟' }; }
 
+// From the Plans page: describe a trip → create a plan + have the AI arrange it
+function aiCreatePlan(text) {
+  const t = (text || '').trim();
+  const id = createPlan({ title: t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程' });
+  openPlan(id); goTab('ai');
+  const prompt = t
+    ? `我想要這樣的旅程：「${t}」。請直接用工具把這份九州・瀨戶內・關西行程調整成符合需求（可新增/刪除/換時間/把活動移到別天），並簡短說明你做了哪些調整。`
+    : '請依我的喜好幫我檢視並調整這份行程。';
+  setTimeout(() => { if (geminiCtl && geminiCtl.ask) geminiCtl.ask(prompt, { agent: true }); }, 350);
+}
+
 // ---- Sharing (Firebase if signed in, else Cloudflare KV) ----
 async function sharePlan(id) {
   if (id === currentPlanId) snapshotCurrent();
@@ -1074,6 +1085,13 @@ function init() {
     else { openSettings(); }
   });
   $('#plansSettingsBtn').addEventListener('click', openSettings);
+  // AI create-trip on plans page
+  const aci = $('#aiCreateInput');
+  $('#aiCreateBtn').addEventListener('click', () => { const v = aci.value; aci.value = ''; aci.style.height = 'auto'; aiCreatePlan(v); });
+  aci.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#aiCreateBtn').click(); } });
+  aci.addEventListener('input', () => { aci.style.height = 'auto'; aci.style.height = Math.min(100, aci.scrollHeight) + 'px'; });
+  const aChips = $('#aiCreateChips');
+  if (aChips) ['美食為主', '輕鬆慢步調', '親子友善', '行程排滿一點', '多拍照打卡點'].forEach(c => aChips.appendChild(el('button', { onclick: () => aiCreatePlan(c) }, c)));
   // sheets
   $('#scrim').addEventListener('click', closeSheets);
   $('#sheetClose').addEventListener('click', closeSheets);

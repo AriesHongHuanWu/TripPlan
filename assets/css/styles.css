@@ -678,6 +678,29 @@ main {
 .plan-badge--tpl { background: color-mix(in srgb, var(--gold) 18%, transparent); color: #a36c00; }
 [data-theme="dark"] .plan-badge--tpl { color: var(--gold); }
 
+/* AI create-trip box (Plans page) */
+.ai-create { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 14px; margin-bottom: 18px; }
+.ai-create__head { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; }
+.ai-create__spark { width: 28px; height: 28px; border-radius: 8px; background: var(--grad-brand); display: grid; place-items: center; color: #fff; }
+.ai-create__spark svg { width: 16px; height: 16px; }
+.ai-create__field { display: flex; align-items: flex-end; gap: 8px; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 8px 8px 8px 12px; transition: border-color .2s, box-shadow .2s; }
+.ai-create__field:focus-within { border-color: var(--brand-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-2) 16%, transparent); }
+.ai-create__field textarea { flex: 1; border: 0; background: none; resize: none; max-height: 100px; font-size: 14.5px; line-height: 1.4; padding: 4px 0; }
+.ai-create__field textarea:focus { outline: none; }
+.ai-create__chips { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; scrollbar-width: none; }
+.ai-create__chips::-webkit-scrollbar { display: none; }
+.ai-create__chips button { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); transition: all .18s var(--ease); }
+.ai-create__chips button:hover { border-color: var(--brand-2); color: var(--brand-2); }
+
+/* Polished login */
+#screen-home { background: radial-gradient(900px 520px at 50% -12%, color-mix(in srgb, var(--brand-2) 13%, transparent), transparent 62%); }
+.home__logo { width: 84px; height: 84px; border-radius: 24px; }
+.home__logo svg { width: 46px; height: 46px; }
+.btn-google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; font-weight: 600; box-shadow: var(--shadow-1); }
+.btn-google:hover { box-shadow: var(--shadow-2); background: #fff; }
+[data-theme="dark"] .btn-google { background: #fff; color: #1f1f1f; border-color: #fff; }
+.btn-google .gicon { width: 18px; height: 18px; flex: none; }
+
 @media (min-width: 600px) {
   body { font-size: 15.5px; }
   #leafmap { height: 60vh; }
