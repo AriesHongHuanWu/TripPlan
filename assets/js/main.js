@@ -423,14 +423,19 @@ function renderTideCard(date) {
 function renderDayPicker() {
   const dp = $('#dayPick'); clear(dp);
   const todayDs = ymd(new Date());
+  let activeEl = null;
   DAYS.forEach((d, i) => {
     const date = new Date(d.date + 'T00:00:00');
-    dp.appendChild(el('.daypill' + (i === selectedDay ? '.is-active' : ''), { onclick: () => selectDay(i) }, [
+    const pill = el('.daypill' + (i === selectedDay ? '.is-active' : ''), { onclick: () => selectDay(i) }, [
       el('.daypill__dow', { text: '週' + d.dow + (d.date === todayDs ? ' ·今' : '') }),
       el('.daypill__num', { text: `${date.getMonth() + 1}/${date.getDate()}` }),
       el('.daypill__city', { text: ((cityByKey[d.cityKey] || {}).name || '').split(' ')[0] }),
-    ]));
+    ]);
+    if (i === selectedDay) activeEl = pill;
+    dp.appendChild(pill);
   });
+  // Keep the selected day visible even on very long (e.g. months-long) trips.
+  if (activeEl) try { activeEl.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); } catch {}
 }
 function selectDay(i) { selectedDay = i; renderDayPicker(); renderDayDetail(i); }
 function openDay(n) { goTab('plan'); selectDay(Math.max(0, Math.min(DAYS.length - 1, n - 1))); }
@@ -1239,37 +1244,86 @@ const PALETTE = ['#2563eb', '#0d9488', '#e11d48', '#d97706', '#7c3aed', '#db2777
 const DOW_CH = ['日', '一', '二', '三', '四', '五', '六'];
 function dowOf(date) { try { return DOW_CH[new Date(date + 'T00:00:00').getDay()]; } catch { return ''; } }
 // Map an AI trip JSON into our internal trip model (defensive).
+// Coerce an AI-supplied transit leg / route into the shape routeBlock() renders.
+function normLeg(l) { return { dep: l.dep || '—', arr: l.arr || '—', line: l.line || '', type: l.type || 'local', dur: l.dur || '', ...(l.note ? { note: l.note } : {}) }; }
+function normRoute(r) { if (!r || typeof r !== 'object') return null; return { fromStn: r.fromStn || '', toStn: r.toStn || '', fare: r.fare || '', pass: r.pass || '', legs: Array.isArray(r.legs) ? r.legs.map(normLeg) : [] }; }
 function normalizeModel(res) {
   const cities = (res.cities || []).map((c, i) => ({
     key: c.key || ('c' + i), name: c.name || c.en || ('城市' + (i + 1)), jp: c.en || '', flag: c.emoji || '📍',
     lat: +c.lat, lng: +c.lng, color: c.color || PALETTE[i % PALETTE.length], station: c.station || '',
-    blurb: c.blurb || '', pois: (c.pois || []).map(p => ({ name: p.name, jp: p.en || '', lat: +p.lat, lng: +p.lng, emoji: p.emoji || '📍', tag: p.tag || 'see', desc: p.desc || '', hours: p.hours || '', fee: p.fee || '' })),
+    blurb: c.blurb || '', pois: (c.pois || []).map(p => ({ name: p.name, jp: p.en || '', lat: +p.lat, lng: +p.lng, emoji: p.emoji || '📍', tag: p.tag || 'see', desc: p.desc || '', hours: p.hours || '', fee: p.fee || '' })).filter(p => p.name),
   })).filter(c => c.name);
+  // De-dupe city keys — a clash would collapse cityByKey/dayByDate lookups.
+  // Use a per-city incrementing counter so the candidate always changes (a fixed
+  // suffix could spin forever if the suffixed key is itself already taken).
+  const seenK = new Set();
+  cities.forEach(c => { let k = c.key, n = 1; while (seenK.has(k)) k = c.key + '-' + (n++); c.key = k; seenK.add(k); });
   const keys = new Set(cities.map(c => c.key));
   const fallbackKey = (cities[0] && cities[0].key) || '';
+  const num = v => (v != null && v !== '' && !isNaN(+v));
   const days = (res.days || []).map((d, i) => {
     const ck = keys.has(d.cityKey) ? d.cityKey : fallbackKey;
+    const wk = keys.has(d.weatherKey) ? d.weatherKey : ck;   // honor AI weatherKey, fall back to the day's city
+    const items = (d.items || []).map(it => ({
+      time: it.time || '', type: it.type || 'see', title: it.title || '',
+      ...(it.jp || it.en ? { jp: it.jp || it.en } : {}),
+      desc: it.desc || '',
+      ...(it.cost ? { cost: it.cost } : {}),
+      ...(it.dur ? { dur: it.dur } : {}),
+      ...(num(it.lat) && num(it.lng) ? { lat: +it.lat, lng: +it.lng } : {}),
+      ...(it.type === 'move' && it.route ? { route: normRoute(it.route) } : {}),
+    })).filter(it => it.title);
+    items.sort((a, b) => parseHM(a.time) - parseHM(b.time));   // keep the day in chronological order
     return {
-      date: d.date || '', dow: d.dow || dowOf(d.date), cityKey: ck, weatherKey: ck,
+      date: d.date || '', dow: d.dow || dowOf(d.date), cityKey: ck, weatherKey: wk,
       title: d.title || ('Day ' + (i + 1)), summary: d.summary || '',
-      items: (d.items || []).map(it => ({ time: it.time || '', type: it.type || 'see', title: it.title || '', desc: it.desc || '', ...(it.cost ? { cost: it.cost } : {}), ...(it.lat != null && it.lng != null ? { lat: +it.lat, lng: +it.lng } : {}) })).filter(it => it.title),
+      items,
     };
   }).filter(d => d.date);
+  days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  // Drop duplicate dates (keep first) — chunked long-trip builds can overlap, and a
+  // dup would collapse dayByDate and misalign Day-N numbering / 今日 lookup.
+  const seenD = new Set();
+  for (let i = 0; i < days.length; i++) { if (seenD.has(days[i].date)) { days.splice(i, 1); i--; } else seenD.add(days[i].date); }
+  days.forEach(d => { d.dow = dowOf(d.date) || d.dow; });
+  // Souvenirs: schema delivers an ARRAY of {cityKey, items[]} -> convert to the
+  // keyed map the 伴手禮 tab reads; keep only entries matching a real city key.
+  const souvenirs = {};
+  const addSouv = (key, arr) => {
+    const k = keys.has(key) ? key : (cities.find(c => c.name === key || c.jp === key) || {}).key;
+    if (!k || !Array.isArray(arr)) return;
+    const list = arr.map(s => ({ name: s.name || '', emoji: s.emoji || '🎁', desc: s.desc || '', where: s.where || '', price: s.price || '' })).filter(s => s.name);
+    if (list.length) souvenirs[k] = (souvenirs[k] || []).concat(list);
+  };
+  if (Array.isArray(res.souvenirs)) res.souvenirs.forEach(s => s && addSouv(s.cityKey, s.items));
+  else if (res.souvenirs && typeof res.souvenirs === 'object') for (const [k, arr] of Object.entries(res.souvenirs)) addSouv(k, arr);
+  // Emergency: sanitize offices so renderEmergency never crashes on missing tel/emg.
+  const emg = res.emergency || {};
+  const emergency = {
+    numbers: Array.isArray(emg.numbers) ? emg.numbers.map(n => ({ label: n.label || '緊急', num: String(n.num || ''), emoji: n.emoji || '📞' })).filter(n => n.num) : [],
+    offices: Array.isArray(emg.offices) ? emg.offices.map(o => ({ name: o.name || '', area: o.area || '', addr: o.addr || '', tel: String(o.tel || ''), emg: String(o.emg || o.tel || '') })).filter(o => o.name && o.tel) : [],
+    ...(emg.taiwanLine ? { taiwanLine: emg.taiwanLine } : {}),
+    ...(Array.isArray(emg.steps) ? { steps: emg.steps } : {}),
+  };
   const trip = res.trip || {};
   return {
     trip: {
       title: trip.title || '我的行程', subtitle: trip.subtitle || '', emoji: trip.emoji || (cities[0] && cities[0].flag) || '🗺️',
       start: trip.start || (days[0] && days[0].date) || '', end: trip.end || (days[days.length - 1] && days[days.length - 1].date) || '',
-      days: days.length, base: trip.base || '', country: trip.country || '',
+      days: days.length, base: trip.base || '', country: trip.country || '', note: trip.note || '',
     },
     cities, days,
-    routes: (res.routes || []).map(r => ({ from: r.from, to: r.to, summary: r.summary || '', fare: r.fare || '', icon: 'i-route' })),
+    routes: (res.routes || []).filter(r => r.from && r.to).map(r => ({
+      from: r.from, to: r.to, fromStn: r.fromStn || '', toStn: r.toStn || '', line: r.line || '',
+      summary: r.summary || '', fare: r.fare || '', pass: r.pass || '', tip: r.tip || '',
+      legs: Array.isArray(r.legs) ? r.legs.map(normLeg) : [], icon: (r.legs && r.legs.length) ? 'i-train' : 'i-route',
+    })),
     pass: (res.pass && res.pass.best) ? res.pass : null,
-    souvenirs: {}, tide: null,
+    souvenirs, tide: null,
     budget: (res.budget && res.budget.fixed) ? res.budget : { fixed: [], mealsPerDay: (res.budget && res.budget.mealsPerDay) || 1500, hotelPerNight: (res.budget && res.budget.hotelPerNight) || 4000, nights: Math.max(0, days.length - 1) },
     currency: (trip.currency && trip.currency.symbol) ? trip.currency : { symbol: '', rate: 1, note: '' },
-    emergency: { numbers: [], offices: [], ...(res.emergency || {}) },
-    packing: res.packing || [],
+    emergency,
+    packing: Array.isArray(res.packing) ? res.packing : [],
   };
 }
 // Apply an AI trip JSON to the CURRENT plan (used by the chat plan_trip tool).
@@ -1316,43 +1370,98 @@ function showGenProgress(msg) {
 function markGenStep(i) { genIdx = i; $$('#genSteps .gen-step').forEach((e, idx) => { e.classList.toggle('is-done', idx < i); e.classList.toggle('is-now', idx === i); }); }
 function hideGenProgress() { clearInterval(genTimer); const o = document.getElementById('genOverlay'); if (o) { markGenStep(GEN_STEPS.length - 1); setTimeout(() => o.classList.remove('is-on'), 280); } }
 
-// Ask the user for missing essentials before generating
+// Ask the user for missing essentials before building. Every question is optional
+// (a 略過 button always builds anyway), so this nudges without ever blocking. The plan
+// already exists by the time this shows, so submit builds INTO it (no duplicate plan).
 let pendingAnswers = null;
-function askTripInfo(text, needInfo, prev) {
-  $('#sheetTitle').textContent = '幾個問題，幫你排得更準';
+function askTripInfo(text, needInfo, prev, titleHint) {
+  $('#sheetTitle').textContent = '再補幾項，AI 排得更準';
   const b = clear($('#sheetBody'));
-  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: '提供以下資訊後，我就能完成你的行程：' }));
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: '看起來還缺一些資訊。補上以下任一項會讓行程更貼近你，也可以直接略過讓 AI 幫你決定：' }));
   const inputs = [];
   (needInfo || []).slice(0, 4).forEach(q => {
-    b.appendChild(el('label', { class: 'tiny muted-3', style: { marginTop: '10px', display: 'block' }, text: q.question || '請補充' }));
-    const inp = el('input', { type: 'text', placeholder: q.hint || '', style: inputStyle() });
+    b.appendChild(el('label', { class: 'tiny muted-3', style: { marginTop: '12px', display: 'block', fontWeight: '600' }, text: q.question || '請補充' }));
+    const inp = el('input', { type: q.type || 'text', placeholder: q.hint || '', style: inputStyle() });
     inputs.push([q.key || q.question, inp]); b.appendChild(inp);
   });
-  b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '14px' }, onclick: () => {
+  b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '16px' }, onclick: () => {
     const answers = { ...(prev || {}) };
     inputs.forEach(([k, inp]) => { if (inp.value.trim()) answers[k] = inp.value.trim(); });
-    pendingAnswers = answers; closeSheets(); aiCreatePlan(text);
-  } }, ['開始建立行程']));
-  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => { pendingAnswers = { ...(prev || {}), _skip: true }; closeSheets(); aiCreatePlan(text); } }, ['略過，直接幫我安排']));
+    closeSheets(); buildCurrentTrip(text, answers, titleHint);
+  } }, [icon('i-ai'), '開始建立行程']));
+  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => { closeSheets(); buildCurrentTrip(text, { ...(prev || {}), _skip: true }, titleHint); } }, ['略過，直接幫我安排']));
   openSheet('sheet');
 }
 
-// Build a trip with AI. ALWAYS creates the plan first (so it shows up in 首頁),
-// opens it, switches to the AI chat, and lets the agent build/fill it live — so
-// progress and any errors are VISIBLE in the conversation, never a silent vanish.
-function aiCreatePlan(text, titleHint) {
+// Build a trip with AI. ALWAYS creates the plan first (so it shows in 首頁 even if
+// generation fails — never a silent vanish), opens it, then builds it in ONE direct
+// generation call (fewer calls than the chat loop → far less quota pressure).
+// `preQuestions` (deterministic wizard gaps) are asked first; empty text just opens chat.
+function aiCreatePlan(text, titleHint, answers, preQuestions) {
   const t = (text || '').trim();
   store.set('kp_entered', true);
   const title = (titleHint && titleHint.trim()) ? titleHint.trim().slice(0, 20) : (t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程');
   const id = createPlan({ title, model: blankModel({ title }), base: 'custom', emoji: '✨' });
-  openPlan(id); goTab('ai');
-  if (t && geminiCtl && geminiCtl.ask) setTimeout(() => geminiCtl.ask('幫我規劃：' + t, { agent: true }), 400);
-  else toast('跟 AI 說你想去哪、玩幾天，就幫你排好整趟 ✨');
+  openPlan(id);
+  if (!t) { goTab('ai'); toast('跟 AI 說你想去哪、玩幾天，就幫你排好整趟 ✨'); return; }
+  const ans = answers || pendingAnswers; pendingAnswers = null;
+  if (preQuestions && preQuestions.length) { askTripInfo(t, preQuestions, ans, titleHint); return; }
+  buildCurrentTrip(t, ans, titleHint);
+}
+// Generate the trip into the CURRENT (already-created) plan, with a visible overlay,
+// chunk progress for long trips, programmatic needInfo, and recoverable errors.
+async function buildCurrentTrip(text, answers, titleHint) {
+  const t = (text || '').trim(); if (!t) return;
+  showGenProgress('AI 正在規劃你的行程…');
+  let res;
+  try {
+    res = await generateTripPlan({ prompt: t, answers, onProgress: (built, total) => {
+      const gt = document.getElementById('genTitle');
+      if (gt && total > 14) gt.textContent = `規劃中… 已完成 ${built}/${total} 天`;
+    } });
+  } catch (e) {
+    hideGenProgress();
+    const m = e.message === 'NO_KEY'
+      ? '尚未設定 AI 金鑰。請到「設定」貼上你的 API 金鑰，或部署後在伺服器設定金鑰。'
+      : e.message === 'RATE_LIMIT'
+      ? 'AI 用量已達上限（配額／速率限制）。請稍等一兩分鐘再試，或在「設定」改用自己的 API 金鑰。'
+      : '建立行程時連線發生問題：' + e.message;
+    appDialog({ title: 'AI 暫時無法建立行程', message: m + '\n\n已先幫你建立一份空白行程，可稍後在「旅伴」用聊天重試，或手動編輯。', confirmText: '前往旅伴', cancelText: '知道了' }).then(go => { if (go) goTab('ai'); });
+    return;
+  }
+  hideGenProgress();
+  if (res && res.needInfo && res.needInfo.length) { askTripInfo(t, res.needInfo, answers, titleHint); return; }
+  const r = applyModel(res);
+  if (!r || r.ok === false) appDialog({ title: '行程內容不足', message: (r && r.msg) || '請再描述清楚一點（目的地、天數），或到「旅伴」用聊天調整。', confirmText: '前往旅伴', cancelText: '知道了' }).then(go => { if (go) goTab('ai'); });
+  else { const built = (res.days || []).length, want = parseInt((titleHint || '').match(/(\d+)\s*日\s*$/)?.[1] || '0', 10); toast(want && built < want ? `✨ 已先排好前 ${built} 天（其餘可稍後續排）` : '✨ 行程建立完成！'); }
 }
 function homeAiCreate(text) { const t = (text || '').trim(); if (!t) return; aiCreatePlan(t); }
 
 // ✨ AI 一鍵建立 — guided Q&A wizard. Collects structured answers so the AI has
 // everything it needs, then builds the whole trip (chat flow).
+// Assemble the wizard answers into a single structured request line.
+function buildWizPrompt(st) {
+  const p = [`目的地：${st.dest.trim()}`, `天數：${st.days} 天`];
+  if (st.date) p.push(`出發日期：${st.date}`);
+  if (st.origin.trim()) p.push(`出發地：${st.origin.trim()}`);
+  if (st.pace) p.push(`節奏：${st.pace}`);
+  if (st.themes.length) p.push(`偏好：${st.themes.join('、')}`);
+  if (st.budget) p.push(`預算：${st.budget}`);
+  if (st.party) p.push(`同行：${st.party}`);
+  if (st.extra.trim()) p.push(`其他：${st.extra.trim()}`);
+  return p.join('；');
+}
+// Check whether the wizard has enough to build a GOOD plan. Only nudges when the
+// form was left almost empty (basically just a destination); otherwise builds straight.
+function assessTrip(st) {
+  const need = [];
+  const engaged = !!(st.date || st.origin.trim() || st.themes.length || st.extra.trim());
+  if (engaged) return need;
+  need.push({ key: '出發日期', type: 'date', question: '大約什麼時候出發？', hint: '影響天氣與票價（可留空）' });
+  need.push({ key: '出發地', question: '從哪裡出發？', hint: '幫你安排機場與長途交通，例：台北（可留空）' });
+  need.push({ key: '偏好', question: '這趟想以什麼為主？', hint: '例：美食、自然風景、歷史文化、親子…（可留空）' });
+  return need;
+}
 function wizChips(opts, { selected = '', multi = false, arr = null, onSel } = {}) {
   const row = el('.chiprow', { style: { marginTop: '6px', flexWrap: 'wrap' } });
   opts.forEach(o => {
@@ -1378,7 +1487,12 @@ function openAiWizard() {
   b.appendChild(destIn);
 
   b.appendChild(lbl('玩幾天？'));
-  b.appendChild(wizChips(['2 天', '3 天', '5 天', '7 天', '10 天'], { selected: '5 天', onSel: v => st.days = v.replace(/[^0-9]/g, '') }));
+  const daysInput = el('input', { type: 'number', min: '1', max: '365', value: st.days, inputmode: 'numeric',
+    style: { ...inputStyle(), maxWidth: '130px', marginTop: '0' },
+    oninput: e => { st.days = (e.target.value || '').replace(/[^0-9]/g, ''); [...dayChipRow.children].forEach(x => x.classList.remove('is-on')); } });
+  const dayChipRow = wizChips(['3 天', '5 天', '7 天', '10 天', '14 天'], { selected: '5 天', onSel: v => { st.days = v.replace(/[^0-9]/g, ''); daysInput.value = st.days; } });
+  b.appendChild(dayChipRow);
+  b.appendChild(el('.row', { style: { alignItems: 'center', gap: '8px', marginTop: '8px' } }, [el('span.tiny.muted-3', { text: '或自訂：' }), daysInput, el('span.tiny.muted-3', { text: '天（1–365，玩一年也行）' })]));
 
   b.appendChild(lbl('出發日期（選填）'));
   b.appendChild(el('input', { type: 'date', style: inputStyle(), oninput: e => st.date = e.target.value }));
@@ -1403,16 +1517,12 @@ function openAiWizard() {
 
   b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '18px' }, onclick: () => {
     if (!st.dest.trim()) { toast('請先填想去的目的地'); destIn.focus(); return; }
-    const p = [`目的地：${st.dest.trim()}`, `天數：${st.days} 天`];
-    if (st.date) p.push(`出發日期：${st.date}`);
-    if (st.origin.trim()) p.push(`出發地：${st.origin.trim()}`);
-    if (st.pace) p.push(`節奏：${st.pace}`);
-    if (st.themes.length) p.push(`偏好：${st.themes.join('、')}`);
-    if (st.budget) p.push(`預算：${st.budget}`);
-    if (st.party) p.push(`同行：${st.party}`);
-    if (st.extra.trim()) p.push(`其他：${st.extra.trim()}`);
+    st.days = String(Math.max(1, Math.min(365, parseInt(st.days, 10) || 5)));   // clamp custom days
+    const prompt = buildWizPrompt(st);
+    const titleHint = `${st.dest.trim()} ${st.days} 日`;
+    const need = assessTrip(st);                       // 缺資訊就先問，覺得不夠全才追問
     closeSheets();
-    aiCreatePlan(p.join('；') + '。請直接排好完整逐日行程，不需再追問。', `${st.dest.trim()} ${st.days} 日`);
+    aiCreatePlan(prompt, titleHint, null, need);       // create plan → ask gaps (if any) → build
   } }, [icon('i-ai'), '一鍵建立行程']));
   b.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '10px', lineHeight: '1.6' }, text: '建立後可在「旅伴」用聊天繼續微調。' }));
   openSheet('sheet');
@@ -1920,12 +2030,21 @@ function buildPrintHTML(model, title) {
   const daysHTML = days.map((d, i) => {
     const rows = (d.items || []).filter(Boolean).map(x => {
       const tm = TYPE_META[x.type] || { label: '' };
-      return `<tr><td class="pd-t">${esc(x.time || '')}</td><td class="pd-ty">${esc(tm.label)}</td><td class="pd-ti"><b>${esc(x.title)}</b>${x.desc ? `<div class="pd-d">${esc(x.desc)}</div>` : ''}</td><td class="pd-c">${esc(x.cost || '')}</td></tr>`;
+      return `<tr><td class="pd-t">${esc(x.time || '')}</td><td class="pd-ty">${esc(tm.label)}</td><td class="pd-ti"><b>${esc(x.title)}</b>${x.jp ? `<span class="pd-muted"> ${esc(x.jp)}</span>` : ''}${x.desc ? `<div class="pd-d">${esc(x.desc)}</div>` : ''}${x.dur ? `<div class="pd-d">⏱ ${esc(x.dur)}</div>` : ''}</td><td class="pd-c">${esc(x.cost || '')}</td></tr>`;
     }).join('');
     return `<section class="pd-day"><div class="pd-dh"><span class="pd-dn">Day ${i + 1}</span><span class="pd-dd">${esc(fmtMD(d.date))}${d.dow ? `（${esc(d.dow)}）` : ''} · ${esc(cityNameIn(model, d.cityKey))}</span><span class="pd-dt">${esc(d.title || '')}</span></div>${d.summary ? `<p class="pd-sum">${esc(d.summary)}</p>` : ''}<table class="pd-tab"><tbody>${rows}</tbody></table></section>`;
   }).join('');
   const routes = model.routes || [];
-  const routesHTML = routes.map(r => `<li><b>${esc(r.from)} → ${esc(r.to)}</b> — ${esc(r.summary || '')}${r.fare ? ` <span class="pd-muted">（${esc(r.fare)}）</span>` : ''}</li>`).join('');
+  const routesHTML = routes.map(r => {
+    const legs = (r.legs || []).map(l => `${esc(l.line || '')}${l.dur ? ` ${esc(l.dur)}` : ''}`).filter(Boolean).join(' → ');
+    return `<li><b>${esc(r.from)} → ${esc(r.to)}</b> — ${esc(r.summary || '') || legs}${r.fare ? ` <span class="pd-muted">（${esc(r.fare)}）</span>` : ''}${r.pass ? `<div class="pd-d">${esc(r.pass)}</div>` : ''}</li>`;
+  }).join('');
+  // Souvenirs (per city) — AI trips now carry this; the old PDF silently dropped it.
+  const sv = model.souvenirs || {};
+  const svHTML = Object.keys(sv).map(k => {
+    const list = (sv[k] || []).map(g => `<li>${esc(g.emoji || '🎁')} <b>${esc(g.name)}</b>${g.where ? ` <span class="pd-muted">（${esc(g.where)}${g.price ? ` · ${esc(g.price)}` : ''}）</span>` : ''}${g.desc ? `<div class="pd-d">${esc(g.desc)}</div>` : ''}</li>`).join('');
+    return list ? `<div class="pd-card"><b>${esc(cityNameIn(model, k))}</b><ul class="pd-ul">${list}</ul></div>` : '';
+  }).join('');
   const bud = model.budget || { fixed: [], mealsPerDay: 0, hotelPerNight: 0, nights: 0 };
   let adm = 0; days.forEach(d => (d.items || []).forEach(it => { const s = String(it.cost || ''); const mm = s.replace(/,/g, '').match(/(\d{2,})/); if (mm && /[¥$€£₩฿]/.test(s)) adm += parseInt(mm[1], 10); }));
   const fixed = (bud.fixed || []).reduce((s, f) => s + (f.amount || 0), 0);
@@ -1949,6 +2068,7 @@ function buildPrintHTML(model, title) {
     ${block('交通路線', routesHTML ? `<ul class="pd-ul">${routesHTML}</ul>` : '')}
     ${block('票券', passHTML ? `<div class="pd-card">${passHTML}</div>` : '')}
     ${block('預算估算（每人・參考）', `<table class="pd-tab pd-budget"><tbody>${budgetHTML}</tbody></table>`)}
+    ${block('各地伴手禮', svHTML)}
     ${block('打包清單', packHTML ? `<ul class="pd-cols">${packHTML}</ul>` : '')}
     ${block('緊急聯絡', emHTML ? `<ul class="pd-ul">${emHTML}</ul>` : '')}
     <footer class="pd-foot">由 Plan AI 產生 · ${esc(range)}</footer>
