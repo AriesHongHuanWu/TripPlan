@@ -1,7 +1,7 @@
 // ============================================================================
 // map.js — Leaflet region map (本州/四國/九州) + JR line schematic
 // ============================================================================
-import { CITIES, allPois } from './data.js';
+import { CITIES, allPois, DAYS, cityByKey } from './data.js';
 import { gmapPlace, gmapHotels } from './util.js';
 
 let map, markerIndex = {}, inited = false;
@@ -72,9 +72,22 @@ export function refreshMap(opts = {}) {
   cityLayers.forEach(l => { try { map.removeLayer(l); } catch {} });
   cityLayers = []; markerIndex = {};
 
-  if (opts.rail) RAIL.forEach(r => {
-    cityLayers.push(L.polyline(r.pts, { color: r.color, weight: 4, opacity: .78, dashArray: r.dash ? '5 7' : null, lineCap: 'round' }).addTo(map));
-  });
+  if (opts.rail) {
+    RAIL.forEach(r => {
+      cityLayers.push(L.polyline(r.pts, { color: r.color, weight: 4, opacity: .78, dashArray: r.dash ? '5 7' : null, lineCap: 'round' }).addTo(map));
+    });
+  } else {
+    // Any trip (incl. AI-generated): draw a connecting "journey" line so the route
+    // reads as one continuous trip. Through cities in visit order; if a single city,
+    // through the visited activities in order.
+    let path = []; let last = null;
+    DAYS.forEach(d => { const c = cityByKey[d.cityKey]; if (c && c.lat != null && d.cityKey !== last) { path.push([c.lat, c.lng]); last = d.cityKey; } });
+    if (path.length < 2) {
+      path = [];
+      DAYS.forEach(d => (d.items || []).forEach(it => { if (it.lat != null && it.type !== 'stay') path.push([it.lat, it.lng]); }));
+    }
+    if (path.length >= 2) cityLayers.push(L.polyline(path, { color: '#2563eb', weight: 3, opacity: .6, dashArray: '6 9', lineCap: 'round', lineJoin: 'round' }).addTo(map));
+  }
 
   const pts = [];
   CITIES.forEach(c => {
