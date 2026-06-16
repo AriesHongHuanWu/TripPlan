@@ -26,17 +26,47 @@ export async function initFirebase() {
     auth = A.getAuth(app); db = F.getFirestore(app);
     try { await A.setPersistence(auth, A.browserLocalPersistence); } catch {}
     A.onAuthStateChanged(auth, u => { _user = u; _ready = true; cbs.forEach(cb => cb(u)); });
+    // Complete any pending redirect sign-in (mobile / popup-blocked path). Non-fatal.
+    A.getRedirectResult(auth).catch(e => console.warn('redirect sign-in', e));
     return true;
   } catch (e) { console.warn('Firebase init failed', e); _ready = true; cbs.forEach(cb => cb(null)); return false; }
 }
 
+// In-app webviews (LINE/IG/FB) and many mobile browsers block or lose popups —
+// redirect is far more reliable there.
+const preferRedirect = () => /Android|iPhone|iPad|iPod|FBAN|FBAV|Instagram|Line\//i.test(navigator.userAgent || '');
+
+// Returns the credential on success, or null when the user simply backed out
+// (so callers can treat null as "no-op", not an error). Throws only on real errors.
 export async function signInGoogle() {
   if (!auth) throw new Error('Firebase 尚未設定');
   const provider = new A.GoogleAuthProvider();
-  try { return await A.signInWithPopup(auth, provider); }
-  catch (e) { if (String(e).includes('popup')) return A.signInWithRedirect(auth, provider); throw e; }
+  provider.setCustomParameters({ prompt: 'select_account' });
+  if (preferRedirect()) { await A.signInWithRedirect(auth, provider); return null; }
+  try {
+    return await A.signInWithPopup(auth, provider);
+  } catch (e) {
+    const code = (e && e.code) || '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return null;  // user dismissed
+    if (code === 'auth/popup-blocked') { await A.signInWithRedirect(auth, provider); return null; }     // fall back to redirect
+    throw e;
+  }
 }
 export async function signOutUser() { if (auth) await A.signOut(auth); }
+
+// Turn a Firebase auth error into a friendly, actionable Chinese message.
+export function authErrorMessage(e) {
+  const code = (e && e.code) || '';
+  const map = {
+    'auth/network-request-failed': '網路不穩，請檢查連線後再試一次。',
+    'auth/unauthorized-domain': '這個網域尚未被授權登入。請到 Firebase 主控台 → Authentication → Settings → Authorized domains 加入目前網址。',
+    'auth/operation-not-allowed': 'Google 登入尚未啟用，請到 Firebase 主控台 → Authentication → Sign-in method 開啟 Google。',
+    'auth/account-exists-with-different-credential': '這個 email 已用其他方式登入過，請改用原本的登入方式。',
+    'auth/too-many-requests': '嘗試次數過多，請稍後再試。',
+    'auth/internal-error': '登入服務暫時有問題，請稍後再試。',
+  };
+  return map[code] || (e && e.message) || '登入失敗，請再試一次。';
+}
 
 // ---- Firestore: per-user account mirror (single doc) ----
 export async function pullUserData() {
@@ -79,6 +109,27 @@ export async function collabJoin(code, member) {
 export async function collabSetPlan(code, model, writer) {
   if (!db) return;
   try { await F.setDoc(F.doc(db, 'collab', code), { model, writer, ts: Date.now() }, { merge: true }); } catch (e) { console.warn('collabSetPlan', e); }
+}
+
+// ---- Access control (Google-Docs-style roles) ----
+// access = { general:'restricted'|'viewer'|'commenter'|'editor', people:{ <emailKey>:{role,name,ts} } }
+// general holds the role granted to anyone with the link ('restricted' = only listed people).
+export async function collabSetGeneral(code, general) {
+  if (!db) throw new Error('需登入雲端才能變更權限');
+  await F.setDoc(F.doc(db, 'collab', code), { access: { general } }, { merge: true });
+}
+// FieldPath segments keep dots in the email key from being parsed as a nested path.
+export async function collabSetPersonRole(code, emailKey, entry) {
+  if (!db) throw new Error('需登入雲端才能變更權限');
+  await F.updateDoc(F.doc(db, 'collab', code), new F.FieldPath('access', 'people', emailKey), entry);
+}
+export async function collabRemovePerson(code, emailKey) {
+  if (!db) throw new Error('需登入雲端才能變更權限');
+  await F.updateDoc(F.doc(db, 'collab', code), new F.FieldPath('access', 'people', emailKey), F.deleteField());
+}
+export async function collabDelete(code) {
+  if (!db) throw new Error('需登入雲端');
+  await F.deleteDoc(F.doc(db, 'collab', code));
 }
 export function collabOnDoc(code, cb) {
   if (!db) return () => {};

@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// ============================================================================
+// Plan AI — Firestore security rules
+// ----------------------------------------------------------------------------
+// Enforces the Google-Docs-style sharing model SERVER-SIDE so permissions are
+// real (not just hidden in the UI). Publish via:
+//   • Firebase console → Firestore Database → Rules → paste → Publish, OR
+//   • firebase deploy --only firestore:rules   (needs firebase.json + .firebaserc)
+//
+// Access model on a collab/{code} document:
+//   owner: <uid>
+//   access: {
+//     general: 'restricted' | 'viewer' | 'commenter' | 'editor',  // role for anyone with the link
+//     people:  { <emailKey>: { role:'editor'|'commenter'|'viewer', name, ts } }
+//   }
+// Role precedence: owner > listed person > general (unless 'restricted').
+// emailKey is the lower-cased Google email (matched against request.auth.token.email).
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function myEmail()  { return signedIn() ? request.auth.token.email : null; }
+
+    // ---- per-user private cloud mirror ----
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---- legacy "copy share" snapshots (anyone with the code loads their OWN copy) ----
+    match /shared/{code} {
+      allow read:  if true;          // snapshots are intentionally public-by-code
+      allow write: if signedIn();    // low risk: it's a detached copy, never the live doc
+    }
+
+    // ---- live, permissioned collaborative plans ----
+    match /collab/{code} {
+      function hasAccess()   { return 'access' in resource.data && resource.data.access != null; }
+      function gen()         { return hasAccess() && 'general' in resource.data.access ? resource.data.access.general : 'editor'; }
+      function ppl()         { return hasAccess() && 'people'  in resource.data.access ? resource.data.access.people  : {}; }
+      function listed()      { return myEmail() != null && myEmail() in ppl(); }
+      function personRole()  { return ppl()[myEmail()].role; }
+      function isOwner()     { return signedIn() && resource.data.owner == request.auth.uid; }
+      function canRead()     { return isOwner() || listed() || gen() != 'restricted'; }
+      function canEdit()     { return isOwner() || (listed() && personRole() == 'editor') || (!listed() && gen() == 'editor'); }
+      // A read-capable member may update only their own presence (members/ts).
+      function onlyPresenceChanged() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'ts']); }
+      // Editors may change the itinerary but never the access map or owner.
+      function accessUnchanged() {
+        return request.resource.data.access == resource.data.access
+            && request.resource.data.owner  == resource.data.owner;
+      }
+
+      allow get, list: if canRead();
+      allow create:    if signedIn() && request.resource.data.owner == request.auth.uid;
+      allow update:    if isOwner()
+                       || (canEdit() && accessUnchanged())
+                       || (canRead() && onlyPresenceChanged());
+      allow delete:    if isOwner();
+
+      // ---- group chat / comments ----
+      match /messages/{msg} {
+        function parent()    { return get(/databases/$(database)/documents/collab/$(code)).data; }
+        function pAccess()   { return 'access' in parent() ? parent().access : {}; }
+        function pGen()      { return 'general' in pAccess() ? pAccess().general : 'editor'; }
+        function pPpl()      { return 'people'  in pAccess() ? pAccess().people  : {}; }
+        function pListed()   { return myEmail() != null && myEmail() in pPpl(); }
+        function pOwner()    { return signedIn() && parent().owner == request.auth.uid; }
+        function pCanRead()  { return pOwner() || pListed() || pGen() != 'restricted'; }
+        function pCanComment() {
+          return pOwner()
+              || (pListed() && pPpl()[myEmail()].role in ['editor', 'commenter'])
+              || (!pListed() && pGen() in ['editor', 'commenter']);
+        }
+        allow read:          if pCanRead();
+        allow create:        if pCanComment();
+        allow update, delete: if false;   // messages are immutable
+      }
+    }
+  }
+}

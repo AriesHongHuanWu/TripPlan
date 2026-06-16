@@ -11,7 +11,7 @@ import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.
 import { initMap, refreshMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
 import { initGemini, getCfg, generateTripPlan } from './ai.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
-import { initFirebase, fb, signInGoogle, signOutUser, pullUserData, pushUserData, shareSave, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs } from './firebase.js';
+import { initFirebase, fb, signInGoogle, signOutUser, authErrorMessage, pullUserData, pushUserData, shareSave, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs, collabSetGeneral, collabSetPersonRole, collabRemovePerson, collabDelete } from './firebase.js';
 import * as Notify from './notify.js';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -305,6 +305,7 @@ function sortDay(i) { DAYS[i].items.sort((a, b) => parseHM(a.time) - parseHM(b.t
 function finishEdit(i) { sortDay(i); savePlan(); selectDay(i); if (currentTab !== 'plan') goTab('plan'); if (currentTab === 'today') renderToday(); snapshotCurrent(); scheduleCloudPush(); }
 
 function planAdd({ day, time, title, type = 'see', desc = '', lat, lng }) {
+  if (!canEdit()) return READONLY;
   const i = clampDay(day); if (i < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   if (!time || !/^\d{1,2}:\d{2}$/.test(time)) return { ok: false, msg: '時間格式需為 HH:MM' };
   if (!title) return { ok: false, msg: '缺少活動名稱' };
@@ -312,12 +313,14 @@ function planAdd({ day, time, title, type = 'see', desc = '', lat, lng }) {
   finishEdit(i); return { ok: true, msg: `已新增「${title}」到第 ${i + 1} 天 ${time}` };
 }
 function planRemove({ day, title }) {
+  if (!canEdit()) return READONLY;
   const i = clampDay(day); if (i < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `第 ${i + 1} 天找不到「${title}」` };
   const removed = DAYS[i].items.splice(idx, 1)[0];
   finishEdit(i); return { ok: true, msg: `已刪除「${removed.title}」` };
 }
 function planUpdate({ day, title, newTime, newTitle, desc }) {
+  if (!canEdit()) return READONLY;
   const i = clampDay(day); if (i < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `找不到「${title}」` };
   const it = DAYS[i].items[idx];
@@ -327,6 +330,7 @@ function planUpdate({ day, title, newTime, newTitle, desc }) {
   it._user = true; finishEdit(i); return { ok: true, msg: `已更新「${it.title}」` };
 }
 function planMove({ day, title, toDay, time }) {
+  if (!canEdit()) return READONLY;
   const i = clampDay(day), j = clampDay(toDay); if (i < 0 || j < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `找不到「${title}」` };
   const it = DAYS[i].items.splice(idx, 1)[0];
@@ -335,6 +339,7 @@ function planMove({ day, title, toDay, time }) {
   finishEdit(j); return { ok: true, msg: `已將「${it.title}」移到第 ${j + 1} 天${time ? ' ' + time : ''}` };
 }
 function planReset() {
+  if (!canEdit()) return READONLY;
   if (!currentBase) return { ok: false, msg: '無原始行程可還原' };
   setTrip(cloneModel(currentBase));
   planCustomized = false;
@@ -345,6 +350,7 @@ function planReset() {
 function dateStrAdd(dateStr, n) { try { const d = new Date((dateStr || ymd(new Date())) + 'T00:00:00'); d.setDate(d.getDate() + n); return ymd(d); } catch { return ymd(new Date()); } }
 // AI/manual day management — rebuild the model so derived maps recompute.
 function planAddDay({ date, city, title } = {}) {
+  if (!canEdit()) return READONLY;
   const m = currentModel();
   const last = m.days[m.days.length - 1];
   const dt = (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) ? date : (last && last.date ? dateStrAdd(last.date, 1) : ymd(new Date()));
@@ -357,6 +363,7 @@ function planAddDay({ date, city, title } = {}) {
   return { ok: true, msg: `已新增第 ${m.days.length} 天（${dt}）` };
 }
 function planRemoveDay({ day } = {}) {
+  if (!canEdit()) return READONLY;
   const m = currentModel();
   const i = (parseInt(day, 10) || 0) - 1;
   if (i < 0 || i >= m.days.length) return { ok: false, msg: `天數需為 1–${m.days.length}` };
@@ -369,6 +376,7 @@ function planRemoveDay({ day } = {}) {
 
 // add/edit a single activity via a form sheet
 function openPlanForm(dayIdx, item) {
+  if (!canEdit()) { toast(READONLY.msg); return; }
   const isEdit = !!item;
   $('#sheetTitle').textContent = isEdit ? '編輯活動' : '新增活動';
   const body = clear($('#sheetBody'));
@@ -443,7 +451,7 @@ function renderDayDetail(i) {
     el('.row.wrap', { style: { marginTop: '10px', gap: '8px' } }, [
       el('button.gmap-btn', { onclick: () => goWeather(d.weatherKey) }, [icon('i-weather'), '當地天氣']),
       el('button.gmap-btn', { onclick: () => { showOnMap(d.items.find(x => x.lat)?.title || c.name); } }, [icon('i-pin'), '地圖']),
-      el('button.gmap-btn', { style: editMode ? { borderColor: 'var(--brand-2)', color: 'var(--brand-2)' } : {}, onclick: () => { editMode = !editMode; renderDayDetail(i); } }, [icon('i-plan'), editMode ? '完成編輯' : '編輯行程']),
+      canEdit() ? el('button.gmap-btn', { style: editMode ? { borderColor: 'var(--brand-2)', color: 'var(--brand-2)' } : {}, onclick: () => { editMode = !editMode; renderDayDetail(i); } }, [icon('i-plan'), editMode ? '完成編輯' : '編輯行程']) : null,
     ]),
   ]));
 
@@ -1053,8 +1061,27 @@ let collabUnsub = null, msgUnsub = null, collabTimer = null;
 let collabApplying = false;      // guard: don't echo remote changes back
 let collabMsgs = [];             // group-chat messages of the active collab plan
 let collabMembers = {};          // uid -> { name, ts }
+let currentAccess = null;        // access map of the active collab plan { general, people, owner }
 let aiMode = 'ai';               // '旅伴' tab sub-mode: 'ai' (規劃) | 'chat' (同行聊天)
 const CLIENT_ID = Math.random().toString(36).slice(2, 10);   // distinguishes my own writes
+
+// ---- Roles (Google-Docs-style): owner > editor > commenter > viewer ----
+const ROLE_LABEL = { owner: '擁有者', editor: '編輯者', commenter: '可留言', viewer: '檢視者' };
+const emailKey = e => (e || '').trim().toLowerCase();
+// My role on the ACTIVE plan. Non-collaborative (local) plans are always fully mine.
+function myRole() {
+  if (!currentCollab) return 'owner';
+  const a = currentAccess || {};
+  if (fb.user && a.owner && a.owner === fb.user.uid) return 'owner';
+  const mine = fb.user && a.people && a.people[emailKey(fb.user.email)];
+  if (mine && mine.role) return mine.role;
+  const g = a.general || 'editor';                 // missing access ⇒ legacy all-editors behaviour
+  return g === 'restricted' ? null : g;            // null ⇒ no access at all
+}
+const canEdit = () => ['owner', 'editor'].includes(myRole());
+const canComment = () => ['owner', 'editor', 'commenter'].includes(myRole());
+const isOwnerRole = () => myRole() === 'owner';
+const READONLY = { ok: false, msg: '唯讀：你目前沒有這份行程的編輯權限' };
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const plansMeta = () => store.get('kp_plans', []);
@@ -1133,13 +1160,14 @@ function renderActivePlan() {
   buildWeatherPicker(); renderWeatherHero(); renderWeatherCity(wxCity, $('#wxRoot'));
   buildGiftPicker(); renderGifts();
   updateAppbarTitle(); updatePlanCount();
+  renderRoleBanner();
 }
 function openPlan(id) {
   if (!plansMeta().some(p => p.id === id)) return;
   snapshotCurrent();
   currentPlanId = id; store.set('kp_current', id);
   loadPlanState(id);
-  aiMode = 'ai';
+  aiMode = 'ai'; editMode = false;   // never carry edit mode across plans (esp. into a read-only one)
   const meta = plansMeta().find(p => p.id === id);
   if (meta && meta.collab && collabReady()) startCollab(meta.collab); else stopCollab();
   renderActivePlan();
@@ -1208,6 +1236,7 @@ function normalizeModel(res) {
 }
 // Apply an AI trip JSON to the CURRENT plan (used by the chat plan_trip tool).
 function applyModel(res) {
+  if (!canEdit()) return READONLY;
   if (!res || !res.days || !res.days.length) return { ok: false, msg: '沒有可套用的行程' };
   const model = normalizeModel(res);
   if (!model.days.length) return { ok: false, msg: '行程內容不足' };
@@ -1273,16 +1302,83 @@ function askTripInfo(text, needInfo, prev) {
 // Build a trip with AI. ALWAYS creates the plan first (so it shows up in 首頁),
 // opens it, switches to the AI chat, and lets the agent build/fill it live — so
 // progress and any errors are VISIBLE in the conversation, never a silent vanish.
-function aiCreatePlan(text) {
+function aiCreatePlan(text, titleHint) {
   const t = (text || '').trim();
   store.set('kp_entered', true);
-  const title = t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程';
+  const title = (titleHint && titleHint.trim()) ? titleHint.trim().slice(0, 20) : (t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程');
   const id = createPlan({ title, model: blankModel({ title }), base: 'custom', emoji: '✨' });
   openPlan(id); goTab('ai');
   if (t && geminiCtl && geminiCtl.ask) setTimeout(() => geminiCtl.ask('幫我規劃：' + t, { agent: true }), 400);
   else toast('跟 AI 說你想去哪、玩幾天，就幫你排好整趟 ✨');
 }
 function homeAiCreate(text) { const t = (text || '').trim(); if (!t) return; aiCreatePlan(t); }
+
+// ✨ AI 一鍵建立 — guided Q&A wizard. Collects structured answers so the AI has
+// everything it needs, then builds the whole trip (chat flow).
+function wizChips(opts, { selected = '', multi = false, arr = null, onSel } = {}) {
+  const row = el('.chiprow', { style: { marginTop: '6px', flexWrap: 'wrap' } });
+  opts.forEach(o => {
+    const on = multi ? false : (o === selected);
+    const c = el('button.chip.chip--tap' + (on ? '.is-on' : ''), { onclick: () => {
+      if (multi) { const i = arr.indexOf(o); if (i >= 0) { arr.splice(i, 1); c.classList.remove('is-on'); } else { arr.push(o); c.classList.add('is-on'); } }
+      else { [...row.children].forEach(x => x.classList.remove('is-on')); c.classList.add('is-on'); onSel && onSel(o); }
+    } }, o);
+    row.appendChild(c);
+  });
+  return row;
+}
+function openAiWizard() {
+  store.set('kp_entered', true);
+  $('#sheetTitle').textContent = '✨ AI 一鍵建立行程';
+  const b = clear($('#sheetBody'));
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', marginBottom: '4px' }, text: '回答幾題，AI 就幫你排好整趟行程。只有「目的地」必填，其餘留空 AI 會自行判斷。' }));
+  const lbl = t => el('label', { class: 'tiny muted-3', style: { marginTop: '13px', display: 'block', fontWeight: '600' }, text: t });
+  const st = { dest: '', days: '5', date: '', origin: '', pace: '適中', themes: [], budget: '', party: '', extra: '' };
+
+  b.appendChild(lbl('想去哪？（必填）'));
+  const destIn = el('input', { type: 'text', placeholder: '例：東京、巴黎、北海道、義大利、首爾', style: inputStyle(), oninput: e => st.dest = e.target.value });
+  b.appendChild(destIn);
+
+  b.appendChild(lbl('玩幾天？'));
+  b.appendChild(wizChips(['2 天', '3 天', '5 天', '7 天', '10 天'], { selected: '5 天', onSel: v => st.days = v.replace(/[^0-9]/g, '') }));
+
+  b.appendChild(lbl('出發日期（選填）'));
+  b.appendChild(el('input', { type: 'date', style: inputStyle(), oninput: e => st.date = e.target.value }));
+
+  b.appendChild(lbl('從哪出發？（選填，幫你算交通與機場）'));
+  b.appendChild(el('input', { type: 'text', placeholder: '例：台北桃園', style: inputStyle(), oninput: e => st.origin = e.target.value }));
+
+  b.appendChild(lbl('旅遊節奏'));
+  b.appendChild(wizChips(['輕鬆', '適中', '緊湊'], { selected: '適中', onSel: v => st.pace = v }));
+
+  b.appendChild(lbl('想要的主題（可複選）'));
+  b.appendChild(wizChips(['美食', '自然風景', '歷史文化', '購物', '親子', '網美打卡', '溫泉放鬆', '夜生活'], { multi: true, arr: st.themes }));
+
+  b.appendChild(lbl('預算（選填）'));
+  b.appendChild(wizChips(['平價', '中等', '高級'], { onSel: v => st.budget = v }));
+
+  b.appendChild(lbl('同行（選填）'));
+  b.appendChild(wizChips(['一人', '情侶', '家庭', '朋友'], { onSel: v => st.party = v }));
+
+  b.appendChild(lbl('其他需求（選填）'));
+  b.appendChild(el('textarea', { rows: '2', placeholder: '例：想吃拉麵、要去迪士尼、避免太多走路…', style: { ...inputStyle(), resize: 'vertical' }, oninput: e => st.extra = e.target.value }));
+
+  b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '18px' }, onclick: () => {
+    if (!st.dest.trim()) { toast('請先填想去的目的地'); destIn.focus(); return; }
+    const p = [`目的地：${st.dest.trim()}`, `天數：${st.days} 天`];
+    if (st.date) p.push(`出發日期：${st.date}`);
+    if (st.origin.trim()) p.push(`出發地：${st.origin.trim()}`);
+    if (st.pace) p.push(`節奏：${st.pace}`);
+    if (st.themes.length) p.push(`偏好：${st.themes.join('、')}`);
+    if (st.budget) p.push(`預算：${st.budget}`);
+    if (st.party) p.push(`同行：${st.party}`);
+    if (st.extra.trim()) p.push(`其他：${st.extra.trim()}`);
+    closeSheets();
+    aiCreatePlan(p.join('；') + '。請直接排好完整逐日行程，不需再追問。', `${st.dest.trim()} ${st.days} 日`);
+  } }, [icon('i-ai'), '一鍵建立行程']));
+  b.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '10px', lineHeight: '1.6' }, text: '建立後可在「旅伴」用聊天繼續微調。' }));
+  openSheet('sheet');
+}
 
 // ---- Sharing (Firebase if signed in, else Cloudflare KV) ----
 // Uploads the plan snapshot under a stable, revocable code stored on the plan meta,
@@ -1325,73 +1421,143 @@ async function importSharedCode(code) {
   } catch (e) { toast('載入失敗：' + e.message); }
 }
 
-// ---- Invite / manage-access sheet ----
+// ---- Share & permissions (Google-Docs-style) -------------------------------
+const PERSON_ROLES = [['editor', '編輯者'], ['commenter', '可留言'], ['viewer', '檢視者']];
+const GENERAL_OPTS = [['restricted', '限定 · 只有被加入的人'], ['viewer', '知道連結的人 · 檢視'], ['commenter', '知道連結的人 · 可留言'], ['editor', '知道連結的人 · 可編輯']];
+function roleForDoc(doc) {
+  if (!doc) return null;
+  if (fb.user && doc.owner === fb.user.uid) return 'owner';
+  const mine = fb.user && doc.access && doc.access.people && doc.access.people[emailKey(fb.user.email)];
+  if (mine && mine.role) return mine.role;
+  const g = (doc.access && doc.access.general) || 'editor';
+  return g === 'restricted' ? null : g;
+}
+function selectStyle() { return { ...inputStyle(), marginTop: '0', width: 'auto', padding: '7px 9px', fontSize: '13px' }; }
+function roleSelect(value, opts, onChange) {
+  const sel = el('select', { style: selectStyle() });
+  opts.forEach(([v, l]) => sel.appendChild(el('option', { value: v, ...(v === value ? { selected: 'selected' } : {}) }, l)));
+  sel.addEventListener('change', () => onChange(sel.value));
+  return sel;
+}
+const validEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e || '');
+
 async function openShareSheet(id) {
-  const m = plansMeta().find(p => p.id === id);
-  $('#sheetTitle').textContent = '邀請朋友';
+  $('#sheetTitle').textContent = '分享與權限';
   const b = clear($('#sheetBody'));
-  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', marginBottom: '4px' }, text: '把「' + (m ? m.title : '行程') + '」分享給同行的人。' }));
-  const status = el('.tiny.muted-3', { style: { margin: '12px 0' }, text: '正在建立邀請連結…' });
-  b.appendChild(status);
   openSheet('sheet');
-  let link, code;
-  try { const r = await generateShare(id); link = r.link; code = r.code; }
-  catch (e) { status.textContent = '建立失敗：' + e.message; return; }
-  if ($('#sheetTitle').textContent !== '邀請朋友') return;   // sheet changed while awaiting
-  status.remove();
-  if (m && m.collab) link = location.origin + location.pathname + '?join=' + m.collab;   // collaborative join link
+  const m0 = plansMeta().find(p => p.id === id);
 
-  b.appendChild(el('label', { class: 'tiny muted-3', text: '邀請連結' }));
-  const linkIn = el('input', { value: link, readonly: 'readonly', onclick: e => e.target.select(), style: { ...inputStyle(), fontSize: '13px' } });
-  b.appendChild(linkIn);
-  const updateLinks = () => { linkIn.value = link; if (qr) qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' + encodeURIComponent(link); };
+  // Live, permissioned sharing needs an account (this is what makes role control real).
+  if (!collabReady()) {
+    b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', lineHeight: '1.7' }, text: '用 Google 登入後即可分享這份行程，並像 Google 文件一樣控制每個人的權限（檢視／可留言／編輯）。' }));
+    b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '12px' }, onclick: async () => {
+      try { const u = await signInGoogle(); if (u || fb.user) openShareSheet(id); } catch (e) { toast(authErrorMessage(e)); }
+    } }, [icon('i-user'), '用 Google 登入以分享']));
+    b.appendChild(el('.tiny.muted-3', { style: { marginTop: '12px', lineHeight: '1.7' }, text: '（未登入也可用「匯出」做一份 PDF／JSON 備份分享，但無法控管權限。）' }));
+    return;
+  }
 
-  b.appendChild(el('.grid2', { style: { marginTop: '12px' } }, [
-    el('button.btn.btn--brand', { onclick: async () => { try { await navigator.clipboard.writeText(link); toast('已複製邀請連結'); } catch { linkIn.select(); toast('請長按選取後複製'); } } }, [icon('i-copy'), '複製連結']),
-    navigator.share
-      ? el('button.btn', { onclick: () => navigator.share({ title: m ? m.title : '我的行程', text: '一起看我的旅行行程吧！', url: link }).catch(() => {}) }, [icon('i-share'), '系統分享…'])
-      : el('button.btn', { onclick: async () => { try { await navigator.clipboard.writeText(code); toast('已複製分享碼 ' + code); } catch {} } }, [icon('i-copy'), '複製分享碼']),
-  ]));
-  // ready-to-paste invite message (LINE / messages)
-  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: async () => {
-    const msg = `一起來看「${m ? m.title : '這趟旅行'}」的行程吧！用 Plan AI 打開就能看每日行程、地圖與天氣：\n${link}`;
-    try { await navigator.clipboard.writeText(msg); toast('已複製邀請訊息，貼到 LINE／訊息即可'); } catch { linkIn.select(); toast('請長按複製連結'); }
-  } }, [icon('i-share'), '複製邀請訊息（含連結）']));
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', marginBottom: '8px' }, text: '管理「' + (m0 ? m0.title : '行程') + '」的存取權與成員。' }));
+  const loading = el('.tiny.muted-3', { style: { margin: '10px 2px' }, text: '正在準備共享…' });
+  b.appendChild(loading);
 
-  // QR — friend can scan to open instantly (needs internet to render the QR image)
-  b.appendChild(el('.tiny.muted-3', { style: { margin: '16px 0 8px' }, text: '或讓朋友掃這個 QR 碼：' }));
-  const qr = el('img', { alt: 'QR', loading: 'lazy', src: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' + encodeURIComponent(link), style: { width: '184px', height: '184px', display: 'block', margin: '0 auto', borderRadius: '14px', background: '#fff', padding: '8px', boxShadow: 'var(--shadow-1)' } });
-  qr.onerror = () => { qr.style.display = 'none'; };
-  b.appendChild(qr);
+  // Ensure a live doc exists (creates with default access on first share).
+  let code = m0 && m0.collab;
+  try { if (!code) code = await enableCollab(id); } catch (e) { loading.textContent = '建立共享失敗：' + (e && e.message || ''); return; }
+  if (!code) { loading.textContent = '無法建立共享連結'; return; }
+  const link = location.origin + location.pathname + '?join=' + code;
 
-  // Collaborative ("旅伴") toggle — live shared plan + group chat
-  b.appendChild(el('.row-between', { style: { margin: '18px 0 2px', alignItems: 'flex-start' } }, [
-    el('div', { style: { minWidth: '0', paddingRight: '12px' } }, [
-      el('b', { text: '🤝 共同編輯（即時協作）' }),
-      el('.tiny.muted-3', { style: { marginTop: '3px', lineHeight: '1.6' }, text: '開啟後朋友用此連結加入，會一起編輯「同一份」行程，並可在「旅伴 → 同行聊天」即時討論、用 @ai 規劃。' }),
-    ]),
-    toggleSwitch(!!(m && m.collab), async on => {
-      if (on) {
-        if (!collabReady()) { toast('需先用 Google 登入才能共同編輯'); openShareSheet(id); return; }
-        const cc = await enableCollab(id);
-        if (cc) { link = location.origin + location.pathname + '?join=' + cc; updateLinks(); toast('已開啟共同編輯，把連結分享給朋友即可一起規劃'); }
-        else openShareSheet(id);
-      } else {
-        const arr = plansMeta(); const mm = arr.find(p => p.id === id); if (mm) { delete mm.collab; setPlansMeta(arr); }
+  // (Re)render the whole body from the latest doc state.
+  async function paint() {
+    if ($('#sheetTitle').textContent !== '分享與權限') return;   // user navigated away
+    let doc = null; try { doc = await collabGet(code); } catch {}
+    const role = roleForDoc(doc) || (doc && fb.user && doc.owner === fb.user.uid ? 'owner' : 'editor');
+    const owner = role === 'owner';
+    const access = (doc && doc.access) || { general: 'editor', people: {} };
+    const people = access.people || {};
+
+    const body = clear($('#sheetBody'));
+    body.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', marginBottom: '10px' }, text: '管理「' + (m0 ? m0.title : '行程') + '」的存取權與成員。' }));
+
+    if (owner) {
+      // --- Add people by email ---
+      body.appendChild(el('.tiny.muted-3', { style: { fontWeight: '700', margin: '4px 2px 6px' }, text: '新增使用者' }));
+      const emailIn = el('input', { type: 'email', placeholder: '輸入對方的 Google 信箱', style: { ...inputStyle(), marginTop: '0' } });
+      const addRoleSel = roleSelect('editor', PERSON_ROLES, () => {});
+      const addBtn = el('button.btn.btn--brand', { onclick: async () => {
+        const e = emailKey(emailIn.value);
+        if (!validEmail(e)) { toast('請輸入有效的 Email'); return; }
+        if (fb.user && e === emailKey(fb.user.email)) { toast('那是你自己 🙂'); return; }
+        try { await collabSetPersonRole(code, e, { role: addRoleSel.value, name: '', ts: Date.now() }); emailIn.value = ''; toast('已新增 ' + e); paint(); }
+        catch (err) { toast('新增失敗：' + (err && err.message || '')); }
+      } }, ['新增']);
+      body.appendChild(el('.share-add', {}, [emailIn, el('.row', { style: { gap: '8px', marginTop: '8px', justifyContent: 'flex-end' } }, [addRoleSel, addBtn])]));
+
+      // --- People with access ---
+      body.appendChild(el('.tiny.muted-3', { style: { fontWeight: '700', margin: '16px 2px 6px' }, text: '可存取的人' }));
+      body.appendChild(el('.access-row', {}, [
+        el('.access-row__who', {}, [el('b', { text: (fb.user && (fb.user.displayName || fb.user.email)) || '你' }), el('.tiny.muted-3', { text: (doc && doc.ownerEmail) || (fb.user && fb.user.email) || '' })]),
+        el('span.chip', { text: '擁有者' }),
+      ]));
+      Object.entries(people).forEach(([em, info]) => {
+        body.appendChild(el('.access-row', {}, [
+          el('.access-row__who', {}, [el('b', { text: info.name || em }), info.name ? el('.tiny.muted-3', { text: em }) : null]),
+          roleSelect(info.role || 'viewer', PERSON_ROLES, async v => { try { await collabSetPersonRole(code, em, { ...info, role: v, ts: Date.now() }); paint(); } catch (e) { toast('更新失敗：' + (e && e.message || '')); } }),
+          el('button.iconbtn', { title: '移除存取', onclick: async () => { if (!await confirmDialog({ title: '移除存取', message: `移除 ${em} 的存取權？`, confirmText: '移除', danger: true })) return; try { await collabRemovePerson(code, em); toast('已移除'); paint(); } catch (e) { toast('移除失敗：' + (e && e.message || '')); } } }, [icon('i-trash')]),
+        ]));
+      });
+
+      // --- General (link) access ---
+      body.appendChild(el('.tiny.muted-3', { style: { fontWeight: '700', margin: '16px 2px 6px' }, text: '一般存取權' }));
+      body.appendChild(el('.access-row', {}, [
+        el('.access-row__who', {}, [el('b', { text: access.general === 'restricted' ? '🔒 限定' : '🔗 知道連結的人' }), el('.tiny.muted-3', { text: access.general === 'restricted' ? '只有上方被加入的人能開啟' : '任何拿到連結的人都能開啟' })]),
+        roleSelect(access.general || 'editor', GENERAL_OPTS, async v => { try { await collabSetGeneral(code, v); paint(); } catch (e) { toast('更新失敗：' + (e && e.message || '')); } }),
+      ]));
+    } else {
+      // Non-owner: show own role only.
+      body.appendChild(el('.access-row', {}, [
+        el('.access-row__who', {}, [el('b', { text: '你的角色' }), el('.tiny.muted-3', { text: '由擁有者設定' })]),
+        el('span.chip', { text: ROLE_LABEL[role] || '檢視者' }),
+      ]));
+    }
+
+    // --- Invite link (everyone) ---
+    body.appendChild(el('label', { class: 'tiny muted-3', style: { display: 'block', margin: '16px 2px 2px' }, text: '邀請連結' }));
+    const linkIn = el('input', { value: link, readonly: 'readonly', onclick: e => e.target.select(), style: { ...inputStyle(), fontSize: '13px' } });
+    body.appendChild(linkIn);
+    body.appendChild(el('.grid2', { style: { marginTop: '10px' } }, [
+      el('button.btn.btn--brand', { onclick: async () => { try { await navigator.clipboard.writeText(link); toast('已複製邀請連結'); } catch { linkIn.select(); toast('請長按選取後複製'); } } }, [icon('i-copy'), '複製連結']),
+      navigator.share
+        ? el('button.btn', { onclick: () => navigator.share({ title: m0 ? m0.title : '我的行程', text: '一起看我的旅行行程吧！', url: link }).catch(() => {}) }, [icon('i-share'), '系統分享…'])
+        : el('button.btn', { onclick: async () => { try { await navigator.clipboard.writeText(code); toast('已複製分享碼 ' + code); } catch {} } }, [icon('i-copy'), '複製分享碼']),
+    ]));
+    body.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: async () => {
+      const msg = `一起來規劃「${m0 ? m0.title : '這趟旅行'}」吧！用 Plan AI 打開就能一起看／編輯每日行程、地圖與天氣：\n${link}`;
+      try { await navigator.clipboard.writeText(msg); toast('已複製邀請訊息，貼到 LINE／訊息即可'); } catch { linkIn.select(); toast('請長按複製連結'); }
+    } }, [icon('i-share'), '複製邀請訊息（含連結）']));
+    const qr = el('img', { alt: 'QR', loading: 'lazy', src: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' + encodeURIComponent(link), style: { width: '168px', height: '168px', display: 'block', margin: '14px auto 0', borderRadius: '14px', background: '#fff', padding: '8px', boxShadow: 'var(--shadow-1)' } });
+    qr.onerror = () => { qr.style.display = 'none'; };
+    body.appendChild(qr);
+
+    if (owner) {
+      body.appendChild(el('.tiny.muted-3', { style: { margin: '14px 2px 8px', lineHeight: '1.7' }, text: 'ℹ️ 用 Email 新增的人需用「該 Google 帳號」開啟連結登入（系統不會自動寄信）。' }));
+      body.appendChild(el('button.btn.btn--block', { style: { color: 'var(--sakura)' }, onclick: async () => {
+        if (!await confirmDialog({ title: '停止共享', message: '所有成員將失去存取權，連結也會失效。你的行程會保留為本機私人副本。', confirmText: '停止共享', danger: true })) return;
+        try { await collabDelete(code); } catch {}
+        const arr = plansMeta(); const mm = arr.find(p => p.id === id); if (mm) { delete mm.collab; delete mm.share; setPlansMeta(arr); }
         if (id === currentPlanId) stopCollab();
-        link = location.origin + location.pathname + '?plan=' + code; updateLinks();
-        toast('已關閉共同編輯（改為分享可編輯副本）');
-      }
-    }),
-  ]));
-
-  // Manage access
-  b.appendChild(el('.tiny.muted-3', { style: { margin: '18px 0 6px', fontWeight: '700' }, text: '可存取的人' }));
-  b.appendChild(el('p', { class: 'tiny muted-3', style: { lineHeight: '1.7', margin: '0 0 10px' }, text: '任何拿到上面連結／分享碼的人，都能載入一份「自己的可編輯副本」。對方的修改不會影響你的版本。' }));
-  b.appendChild(el('button.btn.btn--block', { style: { color: 'var(--sakura)' }, onclick: async () => {
-    if (!await confirmDialog({ title: '關閉邀請連結', message: '已加入的人手上的副本會保留，但這條連結／分享碼將失效，需要時可重新產生新的。', confirmText: '關閉連結', danger: true })) return;
-    await revokeShare(id); closeSheets(); toast('已關閉邀請連結');
-  } }, [icon('i-trash'), '關閉此邀請連結']));
+        closeSheets(); toast('已停止共享，改為本機私人行程'); renderPlans();
+      } }, [icon('i-trash'), '停止共享（設為私人）']));
+    } else {
+      body.appendChild(el('button.btn.btn--block', { style: { marginTop: '14px', color: 'var(--sakura)' }, onclick: async () => {
+        if (!await confirmDialog({ title: '離開此共享', message: '將不再同步這份行程；你目前的內容會留存為本機副本。', confirmText: '離開', danger: true })) return;
+        const arr = plansMeta(); const mm = arr.find(p => p.id === id); if (mm) { delete mm.collab; delete mm.share; setPlansMeta(arr); }
+        if (id === currentPlanId) { stopCollab(); renderActivePlan(); }
+        closeSheets(); toast('已離開共享'); renderPlans();
+      } }, [icon('i-back'), '離開此共享']));
+    }
+  }
+  await paint();
 }
 
 function openLoadSharedSheet() {
@@ -1424,7 +1590,11 @@ function importSharedFromURL() {
 function stopCollab() {
   if (collabUnsub) { try { collabUnsub(); } catch {} }
   if (msgUnsub) { try { msgUnsub(); } catch {} }
-  collabUnsub = msgUnsub = null; currentCollab = null; collabMsgs = []; collabMembers = {};
+  collabUnsub = msgUnsub = null; currentCollab = null; collabMsgs = []; collabMembers = {}; currentAccess = null;
+}
+// Normalise a collab doc's permissions into currentAccess (tolerates legacy docs w/o `access`).
+function accessFromDoc(data) {
+  return { owner: data.owner, general: (data.access && data.access.general) || 'editor', people: (data.access && data.access.people) || {} };
 }
 function startCollab(code) {
   if (!collabReady()) return;          // needs login + Firestore
@@ -1432,31 +1602,72 @@ function startCollab(code) {
   collabUnsub = collabOnDoc(code, data => {
     if (!data) return;
     collabMembers = data.members || {};
+    currentAccess = accessFromDoc(data);
+    if (myRole() === null) { handleAccessRevoked(code); return; }   // I was removed / link set to restricted
     if (data.model && data.writer !== CLIENT_ID) {   // apply remote edits (skip my own echo)
       collabApplying = true;
       try { setTrip(data.model); currentBase = currentBase || cloneModel(data.model); renderActivePlan(); } finally { collabApplying = false; }
+    } else {
+      renderRoleBanner();              // model unchanged, but my role may have just changed
     }
-    renderCollabHeader();
+    renderCollabHeader(); updateChatComposerState();
   });
   msgUnsub = collabOnMsgs(code, msgs => { collabMsgs = msgs; if (aiMode === 'chat') renderCollabChat(); renderCollabHeader(); });
 }
-// Push the live trip to the shared doc after a local edit (debounced; skips remote echoes).
+// My access on the active shared plan was revoked → detach and keep what I have as a private copy.
+function handleAccessRevoked(code) {
+  stopCollab();
+  const arr = plansMeta(); const m = arr.find(p => p.collab === code);
+  if (m) { delete m.collab; delete m.share; setPlansMeta(arr); }
+  renderActivePlan();
+  toast('你對這份行程的存取權已變更，已改為你的本機副本');
+}
+// Push the live trip to the shared doc after a local edit (debounced; skips remote echoes & read-only roles).
 function pushCollab() {
-  if (!currentCollab || collabApplying || !collabReady()) return;
+  if (!currentCollab || collabApplying || !collabReady() || !canEdit()) return;
   const code = currentCollab;
   clearTimeout(collabTimer);
   collabTimer = setTimeout(() => { if (currentCollab === code) collabSetPlan(code, cloneModel(currentModel()), CLIENT_ID); }, 700);
 }
+// ---- Read-only banner shown inside the app when my role can't edit ----
+function renderRoleBanner() {
+  const bar = $('#roBanner'); if (!bar) return;
+  const ro = !!currentCollab && !canEdit();
+  bar.hidden = !ro;
+  if (!ro) return;
+  const r = myRole();
+  clear(bar);
+  bar.appendChild(el('span.ro-banner__txt', { text: (r === 'commenter' ? '👁 可留言模式 · 行程唯讀' : '👁 檢視模式 · 唯讀') + '（你是' + (ROLE_LABEL[r] || '訪客') + '）' }));
+  bar.appendChild(el('button.ro-banner__btn', { onclick: saveEditableCopy }, ['另存可編輯副本']));
+}
+function saveEditableCopy() {
+  if (!currentPlanId) return;
+  const st = store.get('kp_state:' + currentPlanId, null) || exportAll();
+  const m = plansMeta().find(p => p.id === currentPlanId);
+  const base = (m ? m.title : '行程').replace(/（協作）$/, '');
+  const newId = createPlan({ title: base + '（我的副本）', fromState: st, base: 'custom' });
+  openPlan(newId); toast('已另存為你的可編輯副本');
+}
+function updateChatComposerState() {
+  const inp = $('#collabInput'), btn = $('#collabSendBtn');
+  const allow = !currentCollab || canComment();
+  if (inp) { inp.disabled = !allow; inp.placeholder = allow ? '和同行者聊天… 輸入「@ai …」可請 AI 幫忙規劃' : '檢視者無法留言（可請對方把你改為「可留言」）'; }
+  if (btn) btn.disabled = !allow;
+}
 const myName = () => (fb.user && (fb.user.displayName || fb.user.email)) || '我';
 
-// Turn the current/given plan into a collaborative one (from the invite sheet toggle).
+// Turn the current/given plan into a live, permissioned shared plan ("分享即協作").
 async function enableCollab(id) {
-  if (!collabReady()) { toast('請先用 Google 登入才能開啟共同編輯'); return null; }
+  if (!collabReady()) { toast('請先用 Google 登入才能開啟共享'); return null; }
   if (id === currentPlanId) snapshotCurrent();
   const arr = plansMeta(); const m = arr.find(p => p.id === id);
   const code = (m && m.collab) || uid();
   const model = (planModelFor(id));
-  await collabSave(code, { model, meta: { title: m ? m.title : '行程', emoji: m ? m.emoji : '🗺️' }, owner: fb.user.uid, members: { [fb.user.uid]: { name: myName(), ts: Date.now() } }, writer: CLIENT_ID });
+  // Only seed `access` on first creation so re-opening Share never clobbers the owner's settings.
+  let existing = null; try { existing = await collabGet(code); } catch {}
+  const payload = { model, meta: { title: m ? m.title : '行程', emoji: m ? m.emoji : '🗺️' }, owner: fb.user.uid, ownerEmail: emailKey(fb.user.email), members: { [fb.user.uid]: { name: myName(), ts: Date.now() } }, writer: CLIENT_ID };
+  if (!existing || !existing.access) payload.access = { general: 'editor', people: {} };   // 預設：知道連結的人可編輯
+  await collabSave(code, payload);
   if (m) { m.collab = code; m.share = code; setPlansMeta(arr); }
   if (id === currentPlanId) startCollab(code);
   return code;
@@ -1465,13 +1676,14 @@ async function enableCollab(id) {
 async function joinCollab(code) {
   showScreen('plans');
   if (!collabReady()) {
-    // remember intent; if they log in we can join. For now fall back to copy-import.
-    toast('請用 Google 登入即可一起共同編輯；先載入一份副本。');
+    // Remember the intent so we can join automatically right after sign-in.
+    try { sessionStorage.setItem('kp_pending_join', code); } catch {}
+    toast('請用 Google 登入即可加入這份共享行程；先為你載入一份副本。');
     return importSharedCode(code);
   }
   try {
     const data = await collabGet(code);
-    if (!data || !data.model) return toast('找不到此協作行程（可能已關閉）');
+    if (!data || !data.model) return toast('找不到此共享行程（可能已關閉或你沒有存取權）');
     let arr = plansMeta(); let m = arr.find(p => p.collab === code);
     let id;
     if (m) { id = m.id; }
@@ -1482,10 +1694,14 @@ async function joinCollab(code) {
       store.set('kp_state:' + id, { v: 3, ts: Date.now(), model: cloneModel(data.model), extras: {} });
       store.set('kp_base:' + id, { v: 3, model: cloneModel(data.model) });
     }
-    await collabJoin(code, { name: myName(), ts: Date.now() });
+    try { await collabJoin(code, { name: myName(), ts: Date.now() }); } catch {}   // presence is best-effort
     openPlan(id);
-    toast('已加入協作行程，可一起編輯與聊天 🤝');
-  } catch (e) { toast('加入失敗：' + e.message); }
+    const r = myRole();
+    toast(r === 'viewer' ? '已加入（檢視模式）👁' : r === 'commenter' ? '已加入，可在同行聊天討論 💬' : '已加入共享行程，可一起編輯與聊天 🤝');
+  } catch (e) {
+    const denied = /permission|insufficient/i.test(e && e.message || '');
+    toast(denied ? '你沒有這份行程的存取權，請向擁有者索取邀請' : '加入失敗：' + (e && e.message || ''));
+  }
 }
 
 // ---- 旅伴 tab: AI 規劃 / 同行聊天 modes ----
@@ -1495,7 +1711,7 @@ function setAiMode(mode) {
   const plan = $('#aiPlanWrap'), chat = $('#collabWrap');
   if (plan) plan.hidden = mode !== 'ai';
   if (chat) chat.hidden = mode !== 'chat';
-  if (mode === 'chat') renderCollabChat();
+  if (mode === 'chat') { renderCollabChat(); updateChatComposerState(); }
 }
 function renderCollabHeader() {
   const e = $('#collabMembers'); if (!e) return;
@@ -1528,7 +1744,8 @@ function renderCollabChat() {
 async function sendCollabMsg() {
   const inp = $('#collabInput'); if (!inp) return;
   const text = inp.value.trim(); if (!text) return;
-  if (!currentCollab) { toast('請先在「邀請朋友」開啟共同編輯，或加入協作行程'); return; }
+  if (!currentCollab) { toast('請先在「分享」開啟共享，或加入共享行程'); return; }
+  if (!canComment()) { toast('檢視者無法留言（可請擁有者把你改為「可留言」）'); return; }
   inp.value = ''; inp.style.height = 'auto';
   const aiMatch = /^[@＠]ai\b/i.test(text);
   collabSendMsg(currentCollab, { uid: fb.user ? fb.user.uid : '', name: myName(), text });
@@ -1694,10 +1911,16 @@ function templateCard() {
     el('.plan-card__ico', { text: '🗾' }),
     el('.plan-card__body', {}, [el('.plan-card__title', { text: '九州・瀨戶內・關西 8 日' }), el('.plan-card__meta', {}, [el('span.plan-badge.plan-badge--tpl', { text: '範本' }), el('span', { text: '點此複製一份來編輯' })])]),
   ]);
-  // Build with AI — chat-based (any country); always opens the AI chat so you see it work
+  // ✨ AI 一鍵建立 — the primary, guided way to make an any-country trip (prominent)
+  const aiWizard = el('.plan-card.plan-card--ai', { style: { marginTop: '12px' }, onclick: () => openAiWizard() }, [
+    el('.plan-card__ico', { text: '✨' }),
+    el('.plan-card__body', {}, [el('.plan-card__title', { text: 'AI 一鍵建立行程' }), el('.plan-card__meta', {}, [el('span.plan-badge', { style: { background: 'rgba(255,255,255,.22)', color: '#fff' }, text: 'AI' }), el('span', { text: '回答幾題，任何國家都幫你排好' })])]),
+    el('.plan-card__actions', {}, [el('button.iconbtn', { title: 'AI 一鍵建立', onclick: e => { e.stopPropagation(); openAiWizard(); } }, [icon('i-ai')])]),
+  ]);
+  // Build with AI — free chat (any country); always opens the AI chat so you see it work
   const aiCard = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => aiCreatePlan('') }, [
     el('.plan-card__ico', { text: '💬' }),
-    el('.plan-card__body', {}, [el('.plan-card__title', { text: '和 AI 聊天建立（任何國家）' }), el('.plan-card__meta', {}, [el('span.plan-badge', { style: { background: 'var(--brand-2)', color: '#fff' }, text: 'AI' }), el('span', { text: '說出目的地與日期，AI 在聊天中幫你排好' })])]),
+    el('.plan-card__body', {}, [el('.plan-card__title', { text: '和 AI 聊天建立' }), el('.plan-card__meta', {}, [el('span.plan-badge', { style: { background: 'var(--brand-2)', color: '#fff' }, text: 'AI' }), el('span', { text: '直接用聊天說需求，AI 即時幫你排' })])]),
     el('.plan-card__actions', {}, [el('button.iconbtn', { title: '用 AI 建立', onclick: e => { e.stopPropagation(); aiCreatePlan(''); } }, [icon('i-ai')])]),
   ]);
   // load shared
@@ -1705,7 +1928,7 @@ function templateCard() {
     el('.plan-card__ico', { text: '🔗' }),
     el('.plan-card__body', {}, [el('.plan-card__title', { text: '載入共享行程' }), el('.plan-card__meta', {}, [el('span', { text: '用同行者給的分享碼／連結' })])]),
   ]);
-  return el('div', {}, [card, aiCard, loadShared]);
+  return el('div', {}, [aiWizard, card, aiCard, loadShared]);
 }
 
 // ---- Account / Firebase ----
@@ -1746,10 +1969,17 @@ function scheduleCloudPush() {
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(() => { snapshotCurrent(); pushUserData(cloudPayload()).catch(() => {}); }, 1500);
 }
+let _syncing = false;
 async function onAuthChange(user) {
-  const homeNote = $('#homeNote');
   if ($('#screen-plans') && !$('#screen-plans').hidden) renderPlans();
-  if (!user) return;
+  if (!user) {
+    // Clean logout: detach any live collaboration so stale-auth listeners can't error.
+    stopCollab();
+    if (!$('#app').hidden) renderActivePlan();
+    return;
+  }
+  if (_syncing) return;       // guard against overlapping auth callbacks
+  _syncing = true;
   // signed in → pull cloud; cloud wins if it has data, else push local up
   try {
     const cloud = await pullUserData();
@@ -1762,8 +1992,12 @@ async function onAuthChange(user) {
     } else {
       await pushUserData(cloudPayload());
     }
-  } catch (e) { console.warn('cloud sync', e); }
+  } catch (e) { console.warn('cloud sync', e); toast('雲端同步暫時失敗，資料仍安全存在本機'); }
+  finally { _syncing = false; }
   try { Notify.registerPush(); } catch {}
+  // Resume a join intent that was deferred until sign-in (?join= link opened while logged out).
+  let pending = null; try { pending = sessionStorage.getItem('kp_pending_join'); } catch {}
+  if (pending && collabReady()) { try { sessionStorage.removeItem('kp_pending_join'); } catch {} joinCollab(pending); return; }
   renderPlans();
 }
 
@@ -1784,12 +2018,26 @@ function init() {
   // plans / account
   $('#plansBtn').addEventListener('click', () => { snapshotCurrent(); showScreen('plans'); });
   $('#guestEnter').addEventListener('click', () => { store.set('kp_entered', true); showScreen('plans'); });
-  $('#googleSignIn').addEventListener('click', async () => { store.set('kp_entered', true); try { await signInGoogle(); showScreen('plans'); } catch (e) { toast('登入失敗：' + e.message); } });
-  $('#plansAuthBtn').addEventListener('click', async () => {
-    if (fb.user) { if (await confirmDialog({ title: '登出帳號', message: '登出後本機資料仍會保留。', confirmText: '登出' })) { await signOutUser(); renderPlans(); } }
-    else if (fb.configured) { try { await signInGoogle(); } catch (e) { toast('登入失敗：' + e.message); } }
-    else { openSettings(); }
-  });
+  // Guard a click handler against double-fires while an auth call is in flight.
+  const withBusy = (btn, fn) => async () => {
+    if (btn && btn.dataset.busy) return;
+    if (btn) { btn.dataset.busy = '1'; btn.disabled = true; }
+    try { await fn(); } finally { if (btn) { delete btn.dataset.busy; btn.disabled = false; } }
+  };
+  const gBtn = $('#googleSignIn');
+  gBtn.addEventListener('click', withBusy(gBtn, async () => {
+    store.set('kp_entered', true);
+    try { await signInGoogle(); showScreen('plans'); }   // null (user cancelled) is not an error
+    catch (e) { toast(authErrorMessage(e)); }
+  }));
+  const authBtn = $('#plansAuthBtn');
+  authBtn.addEventListener('click', withBusy(authBtn, async () => {
+    if (fb.user) {
+      if (await confirmDialog({ title: '登出帳號', message: '登出後本機資料仍會保留。', confirmText: '登出' })) { try { await signOutUser(); } catch (e) { toast(authErrorMessage(e)); } renderPlans(); }
+    } else if (fb.configured) {
+      try { await signInGoogle(); } catch (e) { toast(authErrorMessage(e)); }
+    } else { openSettings(); }
+  }));
   $('#plansSettingsBtn').addEventListener('click', openSettings);
   // install / add to home screen
   const installBtn = $('#homeInstallBtn');
@@ -1812,6 +2060,7 @@ function init() {
   if (hChips) ['5 天東京自由行', '6 天巴黎', '4 天首爾美食', '日本九州 8 天'].forEach(c => hChips.appendChild(el('button', { onclick: () => homeAiCreate(c) }, c)));
   // Cover landing: nav CTAs reuse the existing enter/login handlers
   ['coverStartTop', 'coverStartBottom'].forEach(idd => { const e = $('#' + idd); if (e) e.addEventListener('click', () => $('#guestEnter').click()); });
+  const cw = $('#coverWizard'); if (cw) cw.addEventListener('click', () => { store.set('kp_entered', true); showScreen('plans'); setTimeout(openAiWizard, 60); });
   const clt = $('#coverLoginTop'); if (clt) clt.addEventListener('click', () => $('#googleSignIn').click());
   // Cover: scroll-reveal + 3D parallax
   try {
