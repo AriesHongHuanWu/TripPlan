@@ -1,26 +1,22 @@
 // ============================================================================
-// Firebase web-app config — project 211797227663
+// Firebase web-app config — project "planaiid" (211797227663)
 // ----------------------------------------------------------------------------
-// Until FIREBASE_CONFIG is set, the app runs in LOCAL / GUEST mode (no login,
-// data stored on-device). Fill it in to enable Google sign-in + cloud sync.
+// Note: a Firebase web apiKey is NOT a secret (it only identifies the project);
+// data is protected by Firestore rules + Auth authorized domains. Safe to commit.
 //
-// Get it from: Firebase console → Project settings (⚙) → "Your apps" →
-//   Web app (</>) → SDK setup and configuration → "Config".
-// Then also: Authentication → Sign-in method → enable Google;
-//            Firestore Database → Create (production mode);
-//            Authentication → Settings → Authorized domains → add your
-//            Cloudflare Pages domain (e.g. kyushu-plan.pages.dev) + localhost.
+// Still required in the Firebase console for login to work:
+//   • Authentication → Sign-in method → enable Google
+//   • Firestore Database → created + secure rules published
+//   • Authentication → Settings → Authorized domains → add localhost + your
+//     Cloudflare Pages domain (e.g. <project>.pages.dev) once deployed
 // ============================================================================
 
-export const FIREBASE_CONFIG = null;
-
-/* Example once registered:
 export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSy...",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
+  apiKey: "AIzaSyCzS3b9OtXOABiTt-xihcKv2riKNEaZf7A",
+  authDomain: "planaiid.firebaseapp.com",
+  projectId: "planaiid",
+  storageBucket: "planaiid.firebasestorage.app",
   messagingSenderId: "211797227663",
-  appId: "1:211797227663:web:xxxxxxxxxxxx"
+  appId: "1:211797227663:web:220bd756e64c3f549598fa",
+  measurementId: "G-GK0NFY5BY8"
 };
-*/

@@ -1,5 +1,5 @@
 // Service worker — offline shell + installable PWA
-const CACHE = 'kyushu-plan-v4';
+const CACHE = 'kyushu-plan-v5';
 const ASSETS = [
   './', 'index.html',
   'assets/css/styles.css',
