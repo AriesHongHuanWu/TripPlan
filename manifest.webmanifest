@@ -1,7 +1,7 @@
 {
-  "name": "九州・本州・四國 JR 自由行",
-  "short_name": "九州遊",
-  "description": "九州・本州・四國 8 日 JR 自由行完整規劃：即時天氣、路線導航、伴手禮指南與 Gemini AI 旅伴。",
+  "name": "Plan AI — 智慧旅程規劃",
+  "short_name": "Plan AI",
+  "description": "用 AI 規劃、編輯與共享你的旅程：完整逐日行程、即時天氣、路線導航、預算與旅遊錦囊，並可匯出高品質 PDF 計畫表。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -2,14 +2,14 @@
 // main.js — app orchestrator: tabs, theme, time/location-aware Today,
 // itinerary, routes, weather, souvenirs, settings, Gemini control API.
 // ============================================================================
-import { TRIP, DAYS, CITIES, cityByKey, dayByDate, ROUTES, PASS, SOUVENIRS, TYPE_META, TIDE, allPois } from './data.js';
+import { TRIP, DAYS, CITIES, cityByKey, dayByDate, ROUTES, PASS, SOUVENIRS, TYPE_META, TIDE, allPois, BUDGET, admissionTotal, PACKING, EMERGENCY, setTrip, currentModel, kyushuModel, blankModel } from './data.js';
 import {
   el, clear, icon, $, $$, toast, pad2, ymd, parseHM, nowMinutes,
-  haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC, favs, store,
+  haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC, favs, store, downloadText,
 } from './util.js';
 import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.js';
-import { initMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
-import { initGemini, getCfg } from './gemini.js';
+import { initMap, refreshMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
+import { initGemini, getCfg, generateTripPlan } from './gemini.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
 import { initFirebase, fb, signInGoogle, signOutUser, pullUserData, pushUserData, shareSave, shareGet } from './firebase.js';
 import * as Notify from './notify.js';
@@ -99,13 +99,14 @@ function computeNow() {
   return { now, ds, nm, phase, dayIndex, day, current, next };
 }
 function status() {
+  if (!DAYS.length) return { localTime: `${pad2(new Date().getHours())}:${pad2(new Date().getMinutes())}`, date: ymd(new Date()), phase: '尚未規劃', today: null, current: '這份行程還沒有內容', next: '用 plan_trip 幫使用者規劃', location: lastPos ? '已定位' : '未授權定位', distanceToNext: '—' };
   const s = computeNow();
   let distance = null;
   if (lastPos && s.next && s.next.lat) distance = fmtDistance(haversineKm(lastPos, { lat: s.next.lat, lng: s.next.lng }));
   return {
     localTime: `${pad2(s.now.getHours())}:${pad2(s.now.getMinutes())}`,
     date: s.ds, phase: s.phase === 'before' ? '行程開始前' : s.phase === 'after' ? '行程已結束' : '行程進行中',
-    today: { day: s.dayIndex + 1, city: cityByKey[s.day.cityKey].name, title: s.day.title },
+    today: { day: s.dayIndex + 1, city: (cityByKey[s.day.cityKey] || {}).name || '', title: s.day.title },
     current: s.current ? `${s.current.time} ${s.current.title}` : (s.phase === 'before' ? '行程尚未開始' : '今日行程已結束'),
     next: s.next ? `${s.next.time} ${s.next.title}` : '今日已無安排',
     location: lastPos ? '已定位' : '未授權定位',
@@ -113,19 +114,37 @@ function status() {
   };
 }
 
+// Empty-state card for a blank trip (no days yet)
+function emptyTripCard() {
+  return el('.card.card--pad', { style: { marginTop: '16px', textAlign: 'center' } }, [
+    el('.empty__emoji', { text: '🧭' }),
+    el('.h-card', { text: '這份行程還沒有內容' }),
+    el('p', { class: 'muted', style: { marginTop: '6px', lineHeight: '1.7' }, text: '到「AI 旅伴」說出你的目的地與日期（例如「幫我排 5 天的京都」），我就會自動幫你規劃整趟行程。' }),
+    el('button.btn.btn--brand.btn--block', { style: { marginTop: '14px' }, onclick: () => goTab('ai') }, [icon('i-ai'), '用 AI 規劃這趟行程']),
+  ]);
+}
 // ---------- Today page ----------
 function renderToday() {
   const root = $('#todayRoot'); if (!root) return; clear(root);
+  if (!DAYS.length) {
+    root.appendChild(el('.hero', {}, [
+      el('.hero__eyebrow', { text: 'PLAN AI' }),
+      el('.hero__title', { text: TRIP.title || '新行程' }),
+      el('.hero__meta', {}, [el('span', {}, [icon('i-ai'), ' 等你來規劃'])]),
+    ]));
+    root.appendChild(emptyTripCard());
+    return;
+  }
   const s = computeNow();
-  const city = cityByKey[s.day.weatherKey] || cityByKey[s.day.cityKey];
+  const city = cityByKey[s.day.weatherKey] || cityByKey[s.day.cityKey] || CITIES[0];
 
   // Hero
   root.appendChild(el('.hero', {}, [
-    el('.hero__eyebrow', { text: 'KYUSHU · HONSHU · SHIKOKU' }),
+    el('.hero__eyebrow', { text: (TRIP.country || 'PLAN AI').toString().toUpperCase().slice(0, 24) }),
     el('.hero__title', { text: TRIP.title }),
     el('.hero__meta', {}, [
       el('span', {}, [icon('i-plan'), ` ${TRIP.start.slice(5)} – ${TRIP.end.slice(5)}`]),
-      el('span', {}, [icon('i-train'), ' ' + TRIP.base]),
+      TRIP.base ? el('span', {}, [icon('i-train'), ' ' + TRIP.base]) : null,
       el('span', {}, [icon('i-pin'), ` ${DAYS.length} 天 · ${CITIES.length} 區`]),
     ]),
   ]));
@@ -139,19 +158,19 @@ function renderToday() {
         el('.nowcard__label', {}, [el('span', { class: 'livedot' }), '即將出發']),
         el('.nowcard__title', { text: days === 0 ? '明天就出發！' : `距離出發還有 ${days} 天` }),
         el('.nowcard__time', {}, [icon('i-today'), ` 現在 ${status().localTime} · ${s.ds}`]),
-        el('.nowcard__next', {}, [el('span', { html: `首日：<b>${DAYS[0].title}</b> — ${DAYS[0].items[0].time} ${DAYS[0].items[0].title}` })]),
+        el('.nowcard__next', {}, [el('span', { html: `首日：<b>${DAYS[0].title}</b>${DAYS[0].items[0] ? ` — ${DAYS[0].items[0].time} ${DAYS[0].items[0].title}` : ''}` })]),
       ]),
     ]));
   } else if (s.phase === 'after') {
     root.appendChild(el('.card.card--pad', { style: { marginTop: '16px', textAlign: 'center' } }, [
       el('.empty__emoji', { text: '🎉' }),
       el('.h-card', { text: '旅程圓滿結束！' }),
-      el('p', { class: 'muted', style: { marginTop: '6px' }, text: '八日九州・本州之旅辛苦了，期待下次再訪。' }),
+      el('p', { class: 'muted', style: { marginTop: '6px' }, text: '這趟旅程辛苦了，期待下次再出發。' }),
     ]));
   } else {
     const cur = s.current, nxt = s.next;
     const body = [
-      el('.nowcard__label', {}, [el('span', { class: 'livedot' }), `現在 · Day ${s.dayIndex + 1} · ${cityByKey[s.day.cityKey].name}`]),
+      el('.nowcard__label', {}, [el('span', { class: 'livedot' }), `現在 · Day ${s.dayIndex + 1} · ${(cityByKey[s.day.cityKey] || {}).name || ''}`]),
       el('.nowcard__title', { text: cur ? cur.title : '準備出發' }),
       el('.nowcard__time', {}, [icon('i-today'), ` ${status().localTime}${cur ? ' · ' + cur.time + ' 開始' : ''}`]),
     ];
@@ -168,26 +187,28 @@ function renderToday() {
       body.push(el('.nowcard__next', {}, [el('div', { text: '今日行程已完成，好好休息 🛏️' })]));
     }
     root.appendChild(el('.nowcard', { style: { marginTop: '16px' } }, [el('.nowcard__bg'), el('.nowcard__body', {}, body)]));
-    root.appendChild(renderCommandCard(s));
+    if (s.day.items.filter(x => x.type !== 'stay').length) root.appendChild(renderCommandCard(s));
   }
 
   // Weather snapshot
-  const wxCard = el('.card.card--pad.card--tap', { style: { marginTop: '14px' }, onclick: () => goWeather(city.key) }, [
-    el('.row-between', {}, [
-      el('.row', {}, [el('div', { style: { fontSize: '15px', fontWeight: '650' }, text: `${city.flag} ${city.name} 天氣` })]),
-      el('.chip', {}, [icon('i-chevron'), '詳細']),
-    ]),
-    el('.row', { id: 'todayWxLine', style: { marginTop: '8px', gap: '12px' } }, [el('.skeleton', { style: { height: '24px', width: '160px' } })]),
-  ]);
-  root.appendChild(wxCard);
-  getCurrentSummary(city.key).then(w => {
-    const line = $('#todayWxLine'); if (!line || !w) return; clear(line);
-    line.appendChild(el('div', { style: { fontSize: '26px' }, text: w.emoji }));
-    line.appendChild(el('div', {}, [
-      el('div', { style: { fontWeight: '700', fontSize: '18px' }, text: `${w.temp}° ${w.label}` }),
-      el('.tiny.muted', { text: `${w.lo}° / ${w.hi}° · 降雨 ${w.rainProb}% · 濕度 ${w.humidity}%` }),
-    ]));
-  });
+  if (city) {
+    const wxCard = el('.card.card--pad.card--tap', { style: { marginTop: '14px' }, onclick: () => goWeather(city.key) }, [
+      el('.row-between', {}, [
+        el('.row', {}, [el('div', { style: { fontSize: '15px', fontWeight: '650' }, text: `${city.flag || '📍'} ${city.name} 天氣` })]),
+        el('.chip', {}, [icon('i-chevron'), '詳細']),
+      ]),
+      el('.row', { id: 'todayWxLine', style: { marginTop: '8px', gap: '12px' } }, [el('.skeleton', { style: { height: '24px', width: '160px' } })]),
+    ]);
+    root.appendChild(wxCard);
+    getCurrentSummary(city.key).then(w => {
+      const line = $('#todayWxLine'); if (!line || !w) return; clear(line);
+      line.appendChild(el('div', { style: { fontSize: '26px' }, text: w.emoji }));
+      line.appendChild(el('div', {}, [
+        el('div', { style: { fontWeight: '700', fontSize: '18px' }, text: `${w.temp}° ${w.label}` }),
+        el('.tiny.muted', { text: `${w.lo}° / ${w.hi}° · 降雨 ${w.rainProb}% · 濕度 ${w.humidity}%` }),
+      ]));
+    });
+  }
 
   // Today timeline (compact)
   const tl = el('.card.card--pad', { style: { marginTop: '14px' } }, [
@@ -242,45 +263,35 @@ function renderCommandCard(s) {
   ]);
 }
 
-// ---------- Editable plan (persisted; AI- and hand-editable) ----------
-const PLAN_KEY = 'kp_plan';
-let BASE_ITEMS = null;      // pristine clone of original itinerary (for reset)
+// ---------- Editable plan (per-plan FULL trip model; AI- & hand-editable) ------
+// Each plan persists its OWN trip model (kp_state:{id}.model = trip+cities+days+
+// routes+pass+budget…), so any country works. Personal extras (favs/checklist/
+// bookings/expenses) ride alongside in .extras. The Kyushu data is just a template.
 let planCustomized = false;
 let editMode = false;
+let currentBase = null;       // original model of the current plan (for reset)
+const EXTRA_KEYS = ['kp_favs', 'kp_packing', 'kp_bookings', 'kp_expenses', 'kp_budgetcfg', 'kp_rate'];
+const cloneModel = m => (typeof structuredClone === 'function' ? structuredClone(m) : JSON.parse(JSON.stringify(m)));
 
-function captureBase() { if (!BASE_ITEMS) BASE_ITEMS = DAYS.map(d => JSON.parse(JSON.stringify(d.items))); }
-function loadPlan() {
-  const saved = store.get(PLAN_KEY, null);
-  if (saved && saved.v === 1 && Array.isArray(saved.days) && saved.days.length === DAYS.length) {
-    DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...saved.days[i]));
-    planCustomized = true;
-  }
-}
-function savePlan() { store.set(PLAN_KEY, { v: 1, ts: Date.now(), days: DAYS.map(d => d.items) }); planCustomized = true; }
-function exportPlanObj() { return { v: 1, ts: Date.now(), title: TRIP.title, days: DAYS.map(d => ({ date: d.date, items: d.items })) }; }
-function importPlanObj(obj) {
-  if (!obj || obj.v !== 1 || !Array.isArray(obj.days) || obj.days.length !== DAYS.length) return false;
-  DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...(obj.days[i].items || obj.days[i])));
-  savePlan(); return true;
-}
+function savePlan() { planCustomized = true; }   // persistence happens via snapshotCurrent() (full model)
+function readExtras() { const e = {}; EXTRA_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) e[k] = v; }); return e; }
+function applyExtras(extras) { EXTRA_KEYS.forEach(k => { try { if (extras && extras[k] != null) localStorage.setItem(k, extras[k]); else localStorage.removeItem(k); } catch {} }); }
 
-// Full-state sync: itinerary + favorites + checklist + bookings + expenses + budget + rate.
-// Deliberately EXCLUDES kp_gemini_key (secret) and kp_theme (device preference).
-const SYNC_KEYS = ['kp_plan', 'kp_favs', 'kp_packing', 'kp_bookings', 'kp_expenses', 'kp_budgetcfg', 'kp_rate'];
-function exportAll() {
-  const data = {};
-  SYNC_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) data[k] = v; });
-  return { v: 2, ts: Date.now(), title: TRIP.title, data };
+// migrate a legacy v2 plan blob (Kyushu items-only) into a full model
+function legacyToModel(st) {
+  const m = kyushuModel();
+  const raw = st && st.data && st.data.kp_plan;
+  if (raw) { try { const p = JSON.parse(raw); if (p && Array.isArray(p.days)) m.days.forEach((d, i) => { if (p.days[i]) d.items = (p.days[i].items || p.days[i]); }); } catch {} }
+  return m;
 }
-function importAll(obj) {
-  if (!obj) return false;
-  if (obj.v === 2 && obj.data) {
-    Object.entries(obj.data).forEach(([k, v]) => { if (SYNC_KEYS.includes(k)) { try { localStorage.setItem(k, v); } catch {} } });
-  } else if (obj.v === 1 && Array.isArray(obj.days)) {       // legacy: itinerary-only blob
-    store.set('kp_plan', { v: 1, ts: Date.now(), days: obj.days.map(d => d.items || d) });
-  } else return false;
-  loadPlan();   // re-apply itinerary to DAYS
-  return true;
+function exportAll() { return { v: 3, ts: Date.now(), title: TRIP.title, model: cloneModel(currentModel()), extras: readExtras() }; }
+// Resolve a plan's stored model WITHOUT disturbing the live trip (for export/share).
+function planModelFor(id) {
+  if (id === currentPlanId) snapshotCurrent();
+  const st = store.get('kp_state:' + id, null);
+  if (st && st.v === 3 && st.model) return st.model;
+  if (st && st.v === 2) return legacyToModel(st);
+  return cloneModel(currentModel());
 }
 function clampDay(day) { const i = (parseInt(day, 10) || 0) - 1; return (i >= 0 && i < DAYS.length) ? i : -1; }
 function findItem(i, title) {
@@ -293,20 +304,20 @@ function sortDay(i) { DAYS[i].items.sort((a, b) => parseHM(a.time) - parseHM(b.t
 function finishEdit(i) { sortDay(i); savePlan(); selectDay(i); if (currentTab !== 'plan') goTab('plan'); if (currentTab === 'today') renderToday(); snapshotCurrent(); scheduleCloudPush(); }
 
 function planAdd({ day, time, title, type = 'see', desc = '', lat, lng }) {
-  const i = clampDay(day); if (i < 0) return { ok: false, msg: '天數需為 1–8' };
+  const i = clampDay(day); if (i < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   if (!time || !/^\d{1,2}:\d{2}$/.test(time)) return { ok: false, msg: '時間格式需為 HH:MM' };
   if (!title) return { ok: false, msg: '缺少活動名稱' };
   DAYS[i].items.push({ time, type, title, desc, ...(lat != null && lng != null ? { lat: +lat, lng: +lng } : {}), _user: true });
   finishEdit(i); return { ok: true, msg: `已新增「${title}」到第 ${i + 1} 天 ${time}` };
 }
 function planRemove({ day, title }) {
-  const i = clampDay(day); if (i < 0) return { ok: false, msg: '天數需為 1–8' };
+  const i = clampDay(day); if (i < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `第 ${i + 1} 天找不到「${title}」` };
   const removed = DAYS[i].items.splice(idx, 1)[0];
   finishEdit(i); return { ok: true, msg: `已刪除「${removed.title}」` };
 }
 function planUpdate({ day, title, newTime, newTitle, desc }) {
-  const i = clampDay(day); if (i < 0) return { ok: false, msg: '天數需為 1–8' };
+  const i = clampDay(day); if (i < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `找不到「${title}」` };
   const it = DAYS[i].items[idx];
   if (newTime && /^\d{1,2}:\d{2}$/.test(newTime)) it.time = newTime;
@@ -315,7 +326,7 @@ function planUpdate({ day, title, newTime, newTitle, desc }) {
   it._user = true; finishEdit(i); return { ok: true, msg: `已更新「${it.title}」` };
 }
 function planMove({ day, title, toDay, time }) {
-  const i = clampDay(day), j = clampDay(toDay); if (i < 0 || j < 0) return { ok: false, msg: '天數需為 1–8' };
+  const i = clampDay(day), j = clampDay(toDay); if (i < 0 || j < 0) return { ok: false, msg: `天數需為 1–${DAYS.length}` };
   const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `找不到「${title}」` };
   const it = DAYS[i].items.splice(idx, 1)[0];
   if (time && /^\d{1,2}:\d{2}$/.test(time)) it.time = time;
@@ -323,36 +334,12 @@ function planMove({ day, title, toDay, time }) {
   finishEdit(j); return { ok: true, msg: `已將「${it.title}」移到第 ${j + 1} 天${time ? ' ' + time : ''}` };
 }
 function planReset() {
-  if (!BASE_ITEMS) return { ok: false, msg: '無原始行程' };
-  DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...JSON.parse(JSON.stringify(BASE_ITEMS[i]))));
-  try { localStorage.removeItem(PLAN_KEY); } catch {}
+  if (!currentBase) return { ok: false, msg: '無原始行程可還原' };
+  setTrip(cloneModel(currentBase));
   planCustomized = false;
-  selectDay(selectedDay); if (currentTab === 'today') renderToday();
+  renderActivePlan();
+  snapshotCurrent(); scheduleCloudPush();
   return { ok: true, msg: '已還原為原始行程' };
-}
-
-// ---- Cloud sync (optional, Cloudflare KV) ----
-function getSyncCode() { let c = store.get('kp_synccode', null); if (!c) { c = Math.random().toString(36).slice(2, 8); store.set('kp_synccode', c); } return c; }
-async function cloudUpload() {
-  const c = getSyncCode();
-  try {
-    const res = await fetch('/api/plan?code=' + encodeURIComponent(c), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportAll()) });
-    if (res.status === 501) return toast('雲端未設定：請先在 Cloudflare 綁定 KV');
-    if (!res.ok) return toast('上傳失敗（' + res.status + '）');
-    toast('已上傳全部資料 · 分享碼 ' + c);
-  } catch (e) { toast('上傳失敗：' + e.message); }
-}
-async function cloudLoad(c) {
-  if (!c) return;
-  try {
-    const res = await fetch('/api/plan?code=' + encodeURIComponent(c));
-    if (res.status === 404) return toast('找不到此分享碼');
-    if (res.status === 501) return toast('雲端未設定：請先在 Cloudflare 綁定 KV');
-    if (!res.ok) return toast('載入失敗（' + res.status + '）');
-    const obj = await res.json();
-    if (importAll(obj)) { store.set('kp_synccode', c); selectDay(selectedDay); if (currentTab === 'today') renderToday(); toast('已從雲端載入全部資料'); closeSheets(); }
-    else toast('資料格式不符');
-  } catch (e) { toast('載入失敗：' + e.message); }
 }
 
 // add/edit a single activity via a form sheet
@@ -408,7 +395,7 @@ function renderDayPicker() {
     dp.appendChild(el('.daypill' + (i === selectedDay ? '.is-active' : ''), { onclick: () => selectDay(i) }, [
       el('.daypill__dow', { text: '週' + d.dow + (d.date === todayDs ? ' ·今' : '') }),
       el('.daypill__num', { text: `${date.getMonth() + 1}/${date.getDate()}` }),
-      el('.daypill__city', { text: cityByKey[d.cityKey].name.split(' ')[0] }),
+      el('.daypill__city', { text: ((cityByKey[d.cityKey] || {}).name || '').split(' ')[0] }),
     ]));
   });
 }
@@ -417,14 +404,15 @@ function openDay(n) { goTab('plan'); selectDay(Math.max(0, Math.min(DAYS.length 
 
 function renderDayDetail(i) {
   const root = $('#dayDetail'); clear(root);
-  const d = DAYS[i], c = cityByKey[d.cityKey];
+  if (!DAYS.length || !DAYS[i]) { root.appendChild(emptyTripCard()); return; }
+  const d = DAYS[i], c = cityByKey[d.cityKey] || { name: '', color: '#2563eb', flag: '📍' };
   const s = computeNow();
   const isToday = s.phase === 'during' && s.dayIndex === i;
 
   root.appendChild(el('.card.card--pad', {}, [
     el('.row-between', {}, [
       el('div', {}, [el('.h-card', { text: d.title }), el('.tiny.muted', { style: { marginTop: '2px' }, text: `${d.date}（週${d.dow}）· ${c.name}` })]),
-      el('span.chip', { style: { background: c.color, color: '#fff', borderColor: 'transparent' }, text: c.flag + ' ' + c.name.split(' ')[0] }),
+      el('span.chip', { style: { background: c.color || '#2563eb', color: '#fff', borderColor: 'transparent' }, text: (c.flag || '📍') + ' ' + (c.name || '').split(' ')[0] }),
     ]),
     el('p', { class: 'muted tiny', style: { marginTop: '10px' }, text: d.summary }),
     el('.row.wrap', { style: { marginTop: '10px', gap: '8px' } }, [
@@ -434,8 +422,8 @@ function renderDayDetail(i) {
     ]),
   ]));
 
-  // Miyajima tide card (on the day that visits 宮島)
-  if (TIDE.days[d.date] && d.items.some(it => /宮島|嚴島|大鳥居/.test(it.title))) root.appendChild(renderTideCard(d.date));
+  // Miyajima tide card (on the day that visits 宮島) — Kyushu template only
+  if (TIDE && TIDE.days && TIDE.days[d.date] && d.items.some(it => /宮島|嚴島|大鳥居/.test(it.title))) root.appendChild(renderTideCard(d.date));
 
   // Per-day mini map
   curDayPts = d.items.filter(it => it.lat && it.type !== 'move' && it.type !== 'stay').map(it => ({ name: it.title, lat: it.lat, lng: it.lng }));
@@ -508,48 +496,72 @@ function renderLeg(l) {
 }
 
 // ---------- Route page (segments) ----------
-function ensureMap() { if (mapReady) return; mapReady = true; initMap(goWeather); }
+function ensureMap() { if (mapReady) return; mapReady = true; initMap(goWeather); try { refreshMap({ rail: isKyushuPlan() }); } catch {} }
 function setRouteSeg(seg) {
   $$('#routeSeg .chip').forEach(c => c.classList.toggle('is-on', c.dataset.seg === seg));
   const map = { map: 'routeMapWrap', lines: 'routeLinesWrap', trips: 'routeTripsWrap', pass: 'routePassWrap' };
   Object.entries(map).forEach(([s, id]) => { const w = $('#' + id); if (w) w.hidden = s !== seg; });
   if (seg === 'map') { ensureMap(); refreshMapSize(); }
 }
+function closuresCard() {
+  return el('.card.card--pad', { style: { marginTop: '14px' } }, [
+    el('.row-between', {}, [
+      el('.h-section', { text: '⚠️ 即時封閉・維修・警示' }),
+      el('span.chip', { style: { background: 'var(--surface-2)', color: 'var(--text-3)' }, text: 'COMING SOON' }),
+    ]),
+    el('p', { class: 'tiny muted-3', style: { marginTop: '8px', lineHeight: '1.7' }, text: '即將推出：自動標示因整修、天災或意外而暫停開放的景點與路段，規劃時主動提醒你避開、改道。' }),
+    el('p', { class: 'tiny muted-3', style: { marginTop: '6px', lineHeight: '1.7' }, text: '💡 現在就可在「AI 旅伴」直接問，例如「○○ 最近有沒有整修或暫停開放？」，AI 會用網路即時查詢。' }),
+  ]);
+}
 function buildRoutePages() {
   // legend for map
   const legend = $('#mapLegend'); clear(legend);
-  CITIES.forEach(c => legend.appendChild(el('span', {}, [el('span', { class: 'legend-dot', style: { background: c.color } }), c.name])));
+  CITIES.forEach(c => legend.appendChild(el('span', {}, [el('span', { class: 'legend-dot', style: { background: c.color || '#2563eb' } }), c.name])));
 
-  // lines (schematic)
+  // lines (schematic) — Kyushu template only; other trips get an overview + closures
   const lw = $('#routeLinesWrap'); clear(lw);
-  lw.appendChild(el('.h-section', { style: { margin: '0 2px 10px' }, text: 'JR 路線示意圖' }));
-  lw.appendChild(el('.card.card--pad', { style: { overflowX: 'auto' } }, [el('div', { html: jrSchematicHTML() })]));
-  lw.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '10px' }, text: '本圖為示意；確切月台與班次請見「所有班次」分頁的 Google 即時連結。' }));
+  if (isKyushuPlan()) {
+    lw.appendChild(el('.h-section', { style: { margin: '0 2px 10px' }, text: 'JR 路線示意圖' }));
+    lw.appendChild(el('.card.card--pad', { style: { overflowX: 'auto' } }, [el('div', { html: jrSchematicHTML() })]));
+    lw.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '10px' }, text: '本圖為示意；確切月台與班次請見「所有班次」分頁的 Google 即時連結。' }));
+  } else {
+    lw.appendChild(el('.h-section', { style: { margin: '0 2px 10px' }, text: '路線概覽' }));
+    lw.appendChild(el('.card.card--pad', {}, [el('p', { class: 'muted', style: { fontSize: '14px', lineHeight: '1.7' }, text: '在「全圖」可看到這趟所有城市與順序；各段交通請見「所有班次」，或讓 AI 旅伴幫你規劃。' })]));
+  }
+  lw.appendChild(closuresCard());
 
   // trips
   const tw = $('#routeTripsWrap'); clear(tw);
   tw.appendChild(el('.h-section', { style: { margin: '0 2px 10px' }, text: '所有跨城班次 · 可直接 Google 導航' }));
-  tw.appendChild(el('.stack', { style: { gap: '12px' } }, ROUTES.map(r => el('.card.card--pad', {}, [routeBlock(r)]))));
+  if (ROUTES.length) tw.appendChild(el('.stack', { style: { gap: '12px' } }, ROUTES.map(r => el('.card.card--pad', {}, [routeBlock(r)]))));
+  else tw.appendChild(el('.card.card--pad', {}, [el('p', { class: 'muted', style: { fontSize: '14px', lineHeight: '1.7' }, text: '尚未設定跨城交通。開啟下方「AI 旅伴」說出你的起訖點與日期，我可以幫你規劃班次與導航。' })]));
 
   // pass
   const pw = $('#routePassWrap'); clear(pw);
-  pw.appendChild(el('.card', {}, [
-    el('.hero', { style: { borderRadius: '0' } }, [
-      el('.hero__eyebrow', { text: 'RECOMMENDED JR PASS' }),
-      el('.hero__title', { style: { fontSize: '20px' }, text: PASS.best }),
-      el('.hero__meta', {}, [el('span', {}, [icon('i-ticket'), ' ' + PASS.price]), el('span', {}, [icon('i-today'), ' ' + PASS.days])]),
-    ]),
-    el('.card--pad', {}, [
-      el('p', { class: 'muted', style: { fontSize: '14px' }, text: PASS.why }),
-      el('.stack', { style: { gap: '6px', marginTop: '12px' } }, PASS.highlights.map(h => el('div', { style: { fontSize: '13.5px' }, text: h }))),
-      el('.divider'),
-      el('.h-section', { text: '票券比較' }),
-      el('.card', { style: { overflowX: 'auto', marginTop: '8px' } }, [passTable()]),
-      el('.divider'),
-      el('.h-section', { text: '如何購買與劃位' }),
-      el('p', { class: 'muted tiny', style: { marginTop: '6px', lineHeight: '1.6' }, text: PASS.buy }),
-    ]),
-  ]));
+  if (PASS && PASS.best) {
+    pw.appendChild(el('.card', {}, [
+      el('.hero', { style: { borderRadius: '0' } }, [
+        el('.hero__eyebrow', { text: 'RECOMMENDED PASS' }),
+        el('.hero__title', { style: { fontSize: '20px' }, text: PASS.best }),
+        el('.hero__meta', {}, [el('span', {}, [icon('i-ticket'), ' ' + (PASS.price || '')]), el('span', {}, [icon('i-today'), ' ' + (PASS.days || '')])]),
+      ]),
+      el('.card--pad', {}, [
+        PASS.why ? el('p', { class: 'muted', style: { fontSize: '14px' }, text: PASS.why }) : null,
+        el('.stack', { style: { gap: '6px', marginTop: '12px' } }, (PASS.highlights || []).map(h => el('div', { style: { fontSize: '13.5px' }, text: h }))),
+        PASS.compare ? el('.divider') : null,
+        PASS.compare ? el('.h-section', { text: '票券比較' }) : null,
+        PASS.compare ? el('.card', { style: { overflowX: 'auto', marginTop: '8px' } }, [passTable()]) : null,
+        PASS.buy ? el('.divider') : null,
+        PASS.buy ? el('.h-section', { text: '如何購買與劃位' }) : null,
+        PASS.buy ? el('p', { class: 'muted tiny', style: { marginTop: '6px', lineHeight: '1.6' }, text: PASS.buy }) : null,
+      ]),
+    ]));
+  } else {
+    pw.appendChild(el('.card.card--pad', {}, [
+      el('.h-section', { text: '交通票券' }),
+      el('p', { class: 'muted', style: { fontSize: '14px', marginTop: '6px', lineHeight: '1.7' }, text: '此行程尚未建議票券。問 AI 旅伴「這趟有沒有適合的交通票券或鐵路 pass？」即可取得建議。' }),
+    ]));
+  }
 }
 function passTable() {
   const head = ['票券', '價格', '天', 'のぞみ', '廣島', '下關', '熊本', '評價'];
@@ -572,8 +584,9 @@ let wxCity = 'kumamoto';
 // Today's planned location + its weather + outfit advice
 async function renderWeatherHero() {
   const host = $('#wxTodayHero'); if (!host) return;
+  if (!DAYS.length || !CITIES.length) { clear(host); host.appendChild(el('.card.card--pad', {}, [el('.muted', { style: { fontSize: '14px', lineHeight: '1.7' }, text: '尚未規劃行程，沒有可顯示的城市天氣。先到「AI 旅伴」建立行程吧。' })])); return; }
   const s = computeNow();
-  const city = cityByKey[s.day.weatherKey] || cityByKey[s.day.cityKey];
+  const city = cityByKey[s.day.weatherKey] || cityByKey[s.day.cityKey] || CITIES[0];
   clear(host); host.appendChild(el('.skeleton', { style: { height: '210px', borderRadius: '28px' } }));
   const w = await getCurrentSummary(city.key);
   clear(host);
@@ -621,17 +634,31 @@ function goWeather(cityKey) {
 
 // ---------- Souvenirs page ----------
 let giftCity = 'kumamoto';
-const GIFT_CITIES = ['kumamoto', 'fukuoka', 'hiroshima', 'shimonoseki', 'takamatsu', 'okayama', 'osaka', 'kyoto', 'nara'];
 function buildGiftPicker() {
   const p = $('#giftCityPick'); clear(p);
-  GIFT_CITIES.forEach(k => { const c = cityByKey[k]; p.appendChild(el('.chip.chip--tap' + (k === giftCity ? '.is-on' : ''), { onclick: () => goSouvenirs(k) }, [c.flag + ' ' + c.name.split(' ')[0]])); });
+  const keys = Object.keys(SOUVENIRS);
+  if (!keys.length) return;
+  if (!keys.includes(giftCity)) giftCity = keys[0];
+  keys.forEach(k => { const c = cityByKey[k] || { flag: '🎁', name: k }; p.appendChild(el('.chip.chip--tap' + (k === giftCity ? '.is-on' : ''), { onclick: () => goSouvenirs(k) }, [(c.flag || '🎁') + ' ' + (c.name || k).split(' ')[0]])); });
 }
 function renderGifts() {
   const root = $('#giftRoot'); clear(root);
-  const c = cityByKey[giftCity], list = SOUVENIRS[giftCity] || [];
-  root.appendChild(el('.card.card--pad', { style: { marginBottom: '12px', background: 'linear-gradient(135deg,' + c.color + '22, transparent)' } }, [
-    el('.h-card', { text: `${c.flag} ${c.name} 必買` }),
-    el('.tiny.muted', { style: { marginTop: '2px' }, text: c.blurb }),
+  const keys = Object.keys(SOUVENIRS);
+  if (!keys.length) {
+    root.appendChild(el('.card.card--pad', { style: { textAlign: 'center' } }, [
+      el('.empty__emoji', { text: '🎁' }),
+      el('.h-card', { text: '尚無伴手禮建議' }),
+      el('p', { class: 'muted', style: { marginTop: '6px', lineHeight: '1.7' }, text: '問 AI 旅伴「這趟有什麼必買伴手禮？」即可取得各地推薦。' }),
+      el('button.btn.btn--brand.btn--block', { style: { marginTop: '12px' }, onclick: () => goTab('ai') }, [icon('i-ai'), '問 AI 推薦伴手禮']),
+    ]));
+    return;
+  }
+  if (!keys.includes(giftCity)) giftCity = keys[0];
+  const c = cityByKey[giftCity] || { flag: '🎁', name: giftCity, color: '#2563eb', blurb: '' };
+  const list = SOUVENIRS[giftCity] || [];
+  root.appendChild(el('.card.card--pad', { style: { marginBottom: '12px', background: 'linear-gradient(135deg,' + (c.color || '#2563eb') + '22, transparent)' } }, [
+    el('.h-card', { text: `${c.flag || '🎁'} ${c.name} 必買` }),
+    el('.tiny.muted', { style: { marginTop: '2px' }, text: c.blurb || '' }),
   ]));
   root.appendChild(el('.card', {}, list.map(g => el('.gift', {}, [
     el('.gift__ico', { text: g.emoji }),
@@ -793,6 +820,14 @@ function renderNotifySettings(body) {
       toggleSwitch(!!c.types[k], v => { Notify.setType(k, v); scheduleCloudPush(); }),
     ]));
   });
+  // Status panel — distinguishes local reminders (work offline) from server push (needs cloud setup)
+  const ps = Notify.pushStatus();
+  const pushTxt = !fb.configured ? '需雲端設定（Firebase）' : !fb.user ? '需登入後才會啟用' : (ps === 'ok' ? '已啟用 ✓' : ps === 'unavailable' ? '⚠ 需在 Google Cloud 啟用 FCM 與 Installations API' : ps === 'pending' ? '設定中…' : '尚未啟用');
+  body.appendChild(el('.notify-status', { style: { marginTop: '12px', padding: '12px 14px', borderRadius: '12px', background: 'var(--surface-2)', fontSize: '13px', lineHeight: '1.7' } }, [
+    el('div', {}, [el('b', { text: '本機提醒（App 開著時）：' }), el('span', { text: on ? '已啟用 ✓' : '關閉' })]),
+    el('div', {}, [el('b', { text: '伺服器推播（App 關閉時）：' }), el('span', { text: pushTxt })]),
+    el('.tiny.muted-3', { style: { marginTop: '4px' }, text: '行程提醒在 App／PWA 開著時即可運作，不需登入。App 完全關閉時的推播需登入並完成雲端設定。' }),
+  ]));
   body.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: () => { if (!on) { toast('請先啟用通知'); return; } Notify.notify('reminder', '🔔 測試通知', '通知運作正常！'); } }, ['發送測試通知']));
 }
 function maybeNotifyIntro() {
@@ -937,82 +972,243 @@ function showScreen(name) {
   window.scrollTo({ top: 0 });
 }
 
-function templateSnapshot() { return { v: 2, ts: Date.now(), data: {} }; }   // empty data = base Kyushu
+function templateSnapshot() { return { v: 3, ts: Date.now(), model: kyushuModel(), extras: {} }; }
+function planBaseOf(id) { const m = plansMeta().find(p => p.id === id); return m ? (m.base || 'custom') : 'custom'; }
+function isKyushuPlan() { return planBaseOf(currentPlanId) === 'kyushu'; }
 
-function resetToBase() {
-  DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...JSON.parse(JSON.stringify(BASE_ITEMS[i]))));
-  SYNC_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+// Load a plan's stored model into the LIVE trip + restore its personal extras.
+function loadPlanState(id) {
+  const st = store.get('kp_state:' + id, null);
+  let model;
+  if (st && st.v === 3 && st.model) { model = st.model; applyExtras(st.extras || {}); }
+  else if (st && st.v === 2) { model = legacyToModel(st); applyExtras(st.data || {}); }
+  else { model = planBaseOf(id) === 'kyushu' ? kyushuModel() : kyushuModel(); applyExtras({}); }
+  setTrip(model);
+  const baseSt = store.get('kp_base:' + id, null);
+  currentBase = (baseSt && baseSt.model) ? baseSt.model : (planBaseOf(id) === 'kyushu' ? kyushuModel() : cloneModel(model));
   planCustomized = false;
 }
-function loadPlanState(id) { resetToBase(); const data = store.get('kp_state:' + id, null); if (data) importAll(data); }
 function snapshotCurrent() {
   if (!currentPlanId) return;
   store.set('kp_state:' + currentPlanId, exportAll());
   const arr = plansMeta(); const m = arr.find(p => p.id === currentPlanId); if (m) { m.updatedAt = Date.now(); setPlansMeta(arr); }
 }
 
-function createPlan({ title, fromData = null } = {}) {
+function createPlan({ title, model = null, fromState = null, base = null, emoji = null } = {}) {
   const id = uid();
+  let st;
+  if (fromState) {
+    if (fromState.v === 3 && fromState.model) st = { v: 3, ts: Date.now(), model: cloneModel(fromState.model), extras: fromState.extras || {} };
+    else if (fromState.v === 2) st = { v: 3, ts: Date.now(), model: legacyToModel(fromState), extras: fromState.data || {} };
+    else st = { v: 3, ts: Date.now(), model: kyushuModel(), extras: {} };
+  } else {
+    st = { v: 3, ts: Date.now(), model: cloneModel(model || kyushuModel()), extras: {} };
+  }
+  const m = st.model;
   const arr = plansMeta();
-  arr.unshift({ id, title: title || '九州・瀨戶內・關西', emoji: '🗾', base: 'kyushu', createdAt: Date.now(), updatedAt: Date.now() });
+  arr.unshift({
+    id, title: title || (m.trip && m.trip.title) || '新行程',
+    emoji: emoji || (m.trip && m.trip.emoji) || '🗺️',
+    base: base || (model || fromState ? 'custom' : 'kyushu'),
+    createdAt: Date.now(), updatedAt: Date.now(),
+  });
   setPlansMeta(arr);
-  store.set('kp_state:' + id, fromData || templateSnapshot());
+  store.set('kp_state:' + id, st);
+  store.set('kp_base:' + id, { v: 3, model: cloneModel(m) });
   scheduleCloudPush();
   return id;
+}
+// Re-render every trip-dependent surface for the active plan (any country).
+function renderActivePlan() {
+  const todayEntry = dayByDate[ymd(new Date())]; selectedDay = todayEntry ? todayEntry.index : 0;
+  if (CITIES[0] && CITIES[0].key) wxCity = CITIES[0].key;
+  renderToday(); renderDayPicker(); renderDayDetail(selectedDay);
+  buildRoutePages(); try { refreshMap({ rail: isKyushuPlan() }); } catch {}
+  buildWeatherPicker(); renderWeatherHero(); renderWeatherCity(wxCity, $('#wxRoot'));
+  buildGiftPicker(); renderGifts();
+  updateAppbarTitle(); updatePlanCount();
 }
 function openPlan(id) {
   if (!plansMeta().some(p => p.id === id)) return;
   snapshotCurrent();
   currentPlanId = id; store.set('kp_current', id);
   loadPlanState(id);
-  const todayEntry = dayByDate[ymd(new Date())]; selectedDay = todayEntry ? todayEntry.index : 0;
-  renderToday(); renderDayPicker(); renderDayDetail(selectedDay);
-  buildWeatherPicker(); renderWeatherHero(); renderWeatherCity(wxCity, $('#wxRoot'));
-  buildGiftPicker(); renderGifts();
-  updateAppbarTitle();
+  renderActivePlan();
   goTab('today'); showScreen('app');
   try { Notify.scheduleReminders(); } catch {}
 }
-function updateAppbarTitle() { const m = plansMeta().find(p => p.id === currentPlanId); if (m) { const t = $('#appbarTitle'); if (t) t.textContent = m.title; } }
+function fmtMD(d) { const p = String(d).split('-'); return p.length === 3 ? `${+p[1]}/${+p[2]}` : d; }
+function fmtRange(a, b) { return `${fmtMD(a)}–${fmtMD(b)}`; }
+function updateAppbarTitle() {
+  const m = plansMeta().find(p => p.id === currentPlanId);
+  const t = $('#appbarTitle'); if (t && m) t.textContent = m.title;
+  const s = $('#appbarSub');
+  if (s) s.textContent = DAYS.length
+    ? `${fmtRange(DAYS[0].date, DAYS[DAYS.length - 1].date)} · ${DAYS.length} 天`
+    : (TRIP.start && TRIP.end ? fmtRange(TRIP.start, TRIP.end) : '尚未規劃 · 問 AI 幫你排');
+}
+function updatePlanCount() { const c = $('#planCountChip'); if (c) c.textContent = `${DAYS.length} 天`; }
 function deletePlan(id) {
   let arr = plansMeta().filter(p => p.id !== id); setPlansMeta(arr);
-  try { localStorage.removeItem('kp_state:' + id); } catch {}
-  if (currentPlanId === id) { currentPlanId = arr[0] ? arr[0].id : null; store.set('kp_current', currentPlanId); if (currentPlanId) loadPlanState(currentPlanId); }
+  try { localStorage.removeItem('kp_state:' + id); localStorage.removeItem('kp_base:' + id); } catch {}
+  if (currentPlanId === id) { currentPlanId = arr[0] ? arr[0].id : null; store.set('kp_current', currentPlanId); if (currentPlanId) { loadPlanState(currentPlanId); renderActivePlan(); } }
   scheduleCloudPush(); renderPlans();
 }
 function renamePlan(id, title) { const arr = plansMeta(); const m = arr.find(p => p.id === id); if (m && title) { m.title = title; setPlansMeta(arr); updateAppbarTitle(); scheduleCloudPush(); renderPlans(); } }
 
 // AI creates a new plan then jumps to chat to arrange it
-function aiNewPlan(title) { const id = createPlan({ title: title || '新行程' }); openPlan(id); goTab('ai'); toast('已建立新行程，跟 AI 說你想怎麼安排'); return { ok: true, msg: '已建立新行程「' + (title || '新行程') + '」並開啟' }; }
+function aiNewPlan(title) { const id = createPlan({ title: title || '新行程', model: blankModel({ title: title || '新行程' }), base: 'custom' }); openPlan(id); goTab('ai'); toast('已建立空白行程，跟 AI 說你想去哪'); return { ok: true, msg: '已建立空白行程「' + (title || '新行程') + '」並開啟' }; }
 
-// From the Plans page: describe a trip → create a plan + have the AI arrange it
-function aiCreatePlan(text) {
+// ---- AI: build a whole trip (any country) from a description --------------------
+const PALETTE = ['#2563eb', '#0d9488', '#e11d48', '#d97706', '#7c3aed', '#db2777', '#16a34a', '#b91c1c', '#4f46e5', '#65a30d'];
+const DOW_CH = ['日', '一', '二', '三', '四', '五', '六'];
+function dowOf(date) { try { return DOW_CH[new Date(date + 'T00:00:00').getDay()]; } catch { return ''; } }
+// Map an AI trip JSON into our internal trip model (defensive).
+function normalizeModel(res) {
+  const cities = (res.cities || []).map((c, i) => ({
+    key: c.key || ('c' + i), name: c.name || c.en || ('城市' + (i + 1)), jp: c.en || '', flag: c.emoji || '📍',
+    lat: +c.lat, lng: +c.lng, color: c.color || PALETTE[i % PALETTE.length], station: c.station || '',
+    blurb: c.blurb || '', pois: (c.pois || []).map(p => ({ name: p.name, jp: p.en || '', lat: +p.lat, lng: +p.lng, emoji: p.emoji || '📍', tag: p.tag || 'see', desc: p.desc || '', hours: p.hours || '', fee: p.fee || '' })),
+  })).filter(c => c.name);
+  const keys = new Set(cities.map(c => c.key));
+  const fallbackKey = (cities[0] && cities[0].key) || '';
+  const days = (res.days || []).map((d, i) => {
+    const ck = keys.has(d.cityKey) ? d.cityKey : fallbackKey;
+    return {
+      date: d.date || '', dow: d.dow || dowOf(d.date), cityKey: ck, weatherKey: ck,
+      title: d.title || ('Day ' + (i + 1)), summary: d.summary || '',
+      items: (d.items || []).map(it => ({ time: it.time || '', type: it.type || 'see', title: it.title || '', desc: it.desc || '', ...(it.cost ? { cost: it.cost } : {}), ...(it.lat != null && it.lng != null ? { lat: +it.lat, lng: +it.lng } : {}) })).filter(it => it.title),
+    };
+  }).filter(d => d.date);
+  const trip = res.trip || {};
+  return {
+    trip: {
+      title: trip.title || '我的行程', subtitle: trip.subtitle || '', emoji: trip.emoji || (cities[0] && cities[0].flag) || '🗺️',
+      start: trip.start || (days[0] && days[0].date) || '', end: trip.end || (days[days.length - 1] && days[days.length - 1].date) || '',
+      days: days.length, base: trip.base || '', country: trip.country || '',
+    },
+    cities, days,
+    routes: (res.routes || []).map(r => ({ from: r.from, to: r.to, summary: r.summary || '', fare: r.fare || '', icon: 'i-route' })),
+    pass: (res.pass && res.pass.best) ? res.pass : null,
+    souvenirs: {}, tide: null,
+    budget: (res.budget && res.budget.fixed) ? res.budget : { fixed: [], mealsPerDay: (res.budget && res.budget.mealsPerDay) || 1500, hotelPerNight: (res.budget && res.budget.hotelPerNight) || 4000, nights: Math.max(0, days.length - 1) },
+    currency: (trip.currency && trip.currency.symbol) ? trip.currency : { symbol: '', rate: 1, note: '' },
+    emergency: (res.emergency && res.emergency.numbers) ? res.emergency : { numbers: [], offices: [] },
+    packing: res.packing || [],
+  };
+}
+// Apply an AI trip JSON to the CURRENT plan (used by the chat plan_trip tool).
+function applyModel(res) {
+  if (!res || !res.days || !res.days.length) return { ok: false, msg: '沒有可套用的行程' };
+  const model = normalizeModel(res);
+  if (!model.days.length) return { ok: false, msg: '行程內容不足' };
+  setTrip(model);
+  currentBase = cloneModel(model);
+  const arr = plansMeta(); const m = arr.find(p => p.id === currentPlanId);
+  if (m) { m.title = model.trip.title || m.title; m.emoji = model.trip.emoji || m.emoji; m.base = 'custom'; setPlansMeta(arr); }
+  renderActivePlan();
+  snapshotCurrent(); scheduleCloudPush();
+  try { Notify.scheduleReminders(); } catch {}
+  return { ok: true, msg: `已規劃「${model.trip.title}」，共 ${model.days.length} 天、${model.cities.length} 個城市` };
+}
+
+// Progress overlay during generation
+let genTimer = null, genIdx = 0;
+const GEN_STEPS = ['理解你的需求', '研究目的地與城市', '安排每日行程與路線', '查詢各地天氣', '完成最後整理'];
+function showGenProgress(msg) {
+  let o = document.getElementById('genOverlay');
+  if (!o) {
+    o = el('#genOverlay.gen-overlay', {}, [el('.gen-card', {}, [
+      el('.gen-spark', {}, [icon('i-ai')]),
+      el('.gen-title', { id: 'genTitle' }),
+      el('.gen-steps', { id: 'genSteps' }),
+      el('.tiny.muted-3', { style: { marginTop: '14px', textAlign: 'center' }, text: 'AI 正在從零幫你規劃整趟旅程，約需 10–30 秒…' }),
+    ])]);
+    document.body.appendChild(o);
+  }
+  $('#genTitle').textContent = msg || '建立中…';
+  const steps = $('#genSteps'); clear(steps);
+  GEN_STEPS.forEach((s, i) => steps.appendChild(el('.gen-step', {}, [el('span.gen-dot'), el('span', { text: s })])));
+  genIdx = 0; markGenStep(0);
+  o.classList.add('is-on');
+  clearInterval(genTimer);
+  genTimer = setInterval(() => { if (genIdx < GEN_STEPS.length - 1) markGenStep(genIdx + 1); }, 3800);
+}
+function markGenStep(i) { genIdx = i; $$('#genSteps .gen-step').forEach((e, idx) => { e.classList.toggle('is-done', idx < i); e.classList.toggle('is-now', idx === i); }); }
+function hideGenProgress() { clearInterval(genTimer); const o = document.getElementById('genOverlay'); if (o) { markGenStep(GEN_STEPS.length - 1); setTimeout(() => o.classList.remove('is-on'), 280); } }
+
+// Ask the user for missing essentials before generating
+let pendingAnswers = null;
+function askTripInfo(text, needInfo, prev) {
+  $('#sheetTitle').textContent = '幾個問題，幫你排得更準';
+  const b = clear($('#sheetBody'));
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: '提供以下資訊後，我就能完成你的行程：' }));
+  const inputs = [];
+  (needInfo || []).slice(0, 4).forEach(q => {
+    b.appendChild(el('label', { class: 'tiny muted-3', style: { marginTop: '10px', display: 'block' }, text: q.question || '請補充' }));
+    const inp = el('input', { type: 'text', placeholder: q.hint || '', style: inputStyle() });
+    inputs.push([q.key || q.question, inp]); b.appendChild(inp);
+  });
+  b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '14px' }, onclick: () => {
+    const answers = { ...(prev || {}) };
+    inputs.forEach(([k, inp]) => { if (inp.value.trim()) answers[k] = inp.value.trim(); });
+    pendingAnswers = answers; closeSheets(); aiCreatePlan(text);
+  } }, ['開始建立行程']));
+  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => { pendingAnswers = { ...(prev || {}), _skip: true }; closeSheets(); aiCreatePlan(text); } }, ['略過，直接幫我安排']));
+  openSheet('sheet');
+}
+
+// From the Plans page (or template AI button): describe a trip → AI builds the whole thing
+async function aiCreatePlan(text) {
   const t = (text || '').trim();
-  const id = createPlan({ title: t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程' });
-  openPlan(id); goTab('ai');
-  const prompt = t
-    ? `我想要這樣的旅程：「${t}」。請直接用工具把這份九州・瀨戶內・關西行程調整成符合需求（可新增/刪除/換時間/把活動移到別天），並簡短說明你做了哪些調整。`
-    : '請依我的喜好幫我檢視並調整這份行程。';
-  setTimeout(() => { if (geminiCtl && geminiCtl.ask) geminiCtl.ask(prompt, { agent: true }); }, 350);
+  const answers = pendingAnswers; pendingAnswers = null;
+  showGenProgress('正在了解你的需求…');
+  try {
+    const res = await generateTripPlan({ prompt: t, answers });
+    if (res && res.needInfo && res.needInfo.length && !(answers && answers._skip)) { hideGenProgress(); askTripInfo(t, res.needInfo, answers || {}); return; }
+    const model = normalizeModel(res);
+    if (!model.days.length) throw new Error('AI 沒有產生完整的每日行程，請補充目的地與天數再試');
+    $('#genTitle') && ($('#genTitle').textContent = '建立行程中…');
+    const id = createPlan({ title: model.trip.title || (t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程'), model, base: 'custom', emoji: model.trip.emoji });
+    hideGenProgress();
+    openPlan(id);
+    toast(`已建立「${model.trip.title}」🎉 可在 AI 旅伴繼續調整`);
+  } catch (e) {
+    hideGenProgress();
+    if (e.message === 'NO_KEY') {
+      toast('需先設定 Gemini 金鑰才能用 AI 建立行程');
+      const id = createPlan({ title: t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程', model: blankModel({ title: t || 'AI 行程' }), base: 'custom' });
+      openPlan(id); goTab('ai');
+    } else { toast('建立失敗：' + e.message); }
+  }
 }
 
 // ---- Sharing (Firebase if signed in, else Cloudflare KV) ----
-async function sharePlan(id) {
+// Uploads the plan snapshot under a stable, revocable code stored on the plan meta,
+// so the same invite link keeps working and can be turned off later.
+async function uploadShare(code, payload) {
+  if (fb.configured && fb.user) { await shareSave(code, payload); return; }
+  const res = await fetch('/api/plan?code=' + encodeURIComponent(code), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (res.status === 501) throw new Error('分享需先設定雲端（Firebase 登入，或 Cloudflare KV）');
+  if (!res.ok) throw new Error('伺服器錯誤（' + res.status + '）');
+}
+async function generateShare(id) {
   if (id === currentPlanId) snapshotCurrent();
   const data = store.get('kp_state:' + id, templateSnapshot());
-  const m = plansMeta().find(p => p.id === id); const payload = { meta: { title: m ? m.title : '行程', emoji: m ? m.emoji : '🗾' }, state: data };
-  const code = uid();
-  try {
-    if (fb.configured && fb.user) await shareSave(code, payload);
-    else {
-      const res = await fetch('/api/plan?code=' + code, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (res.status === 501) return toast('分享需設定雲端（Firebase 或 Cloudflare KV）');
-      if (!res.ok) return toast('分享失敗（' + res.status + '）');
-    }
-    const link = location.origin + location.pathname + '?plan=' + code;
-    try { await navigator.clipboard.writeText(link); toast('分享連結已複製 · 碼 ' + code); } catch { toast('分享碼：' + code); }
-  } catch (e) { toast('分享失敗：' + e.message); }
+  const arr = plansMeta(); const m = arr.find(p => p.id === id);
+  const code = (m && m.share) || uid();
+  await uploadShare(code, { meta: { title: m ? m.title : '行程', emoji: m ? m.emoji : '🗾' }, state: data });
+  if (m && m.share !== code) { m.share = code; setPlansMeta(arr); }
+  return { code, link: location.origin + location.pathname + '?plan=' + code };
 }
+async function revokeShare(id) {
+  const arr = plansMeta(); const m = arr.find(p => p.id === id);
+  if (!m || !m.share) return;
+  try { await uploadShare(m.share, { revoked: true }); } catch { /* best effort */ }
+  delete m.share; setPlansMeta(arr);
+}
+function shareLinkFor(id) { const m = plansMeta().find(p => p.id === id); return m && m.share ? location.origin + location.pathname + '?plan=' + m.share : null; }
+
 async function importSharedCode(code) {
   if (!code) return;
   try {
@@ -1020,16 +1216,179 @@ async function importSharedCode(code) {
     if (fb.configured && fb.user) payload = await shareGet(code);
     if (!payload) { const res = await fetch('/api/plan?code=' + encodeURIComponent(code)); if (res.ok) payload = await res.json(); }
     if (!payload) return toast('找不到此分享碼');
+    if (payload.revoked) return toast('這個分享連結已被對方關閉');
     const state = payload.state || payload;           // tolerate raw state
     const title = (payload.meta && payload.meta.title) || '共享的行程';
-    const newId = createPlan({ title: title + '（共享）', fromData: state });
+    const newId = createPlan({ title: title + '（共享）', fromState: state, base: 'custom' });
     openPlan(newId); toast('已載入共享行程');
   } catch (e) { toast('載入失敗：' + e.message); }
+}
+
+// ---- Invite / manage-access sheet ----
+async function openShareSheet(id) {
+  const m = plansMeta().find(p => p.id === id);
+  $('#sheetTitle').textContent = '邀請朋友';
+  const b = clear($('#sheetBody'));
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', marginBottom: '4px' }, text: '把「' + (m ? m.title : '行程') + '」分享給同行的人。' }));
+  const status = el('.tiny.muted-3', { style: { margin: '12px 0' }, text: '正在建立邀請連結…' });
+  b.appendChild(status);
+  openSheet('sheet');
+  let link, code;
+  try { const r = await generateShare(id); link = r.link; code = r.code; }
+  catch (e) { status.textContent = '建立失敗：' + e.message; return; }
+  if ($('#sheetTitle').textContent !== '邀請朋友') return;   // sheet changed while awaiting
+  status.remove();
+
+  b.appendChild(el('label', { class: 'tiny muted-3', text: '邀請連結' }));
+  const linkIn = el('input', { value: link, readonly: 'readonly', onclick: e => e.target.select(), style: { ...inputStyle(), fontSize: '13px' } });
+  b.appendChild(linkIn);
+
+  b.appendChild(el('.grid2', { style: { marginTop: '12px' } }, [
+    el('button.btn.btn--brand', { onclick: async () => { try { await navigator.clipboard.writeText(link); toast('已複製邀請連結'); } catch { linkIn.select(); toast('請長按選取後複製'); } } }, [icon('i-copy'), '複製連結']),
+    navigator.share
+      ? el('button.btn', { onclick: () => navigator.share({ title: m ? m.title : '我的行程', text: '一起看我的旅行行程吧！', url: link }).catch(() => {}) }, [icon('i-share'), '系統分享…'])
+      : el('button.btn', { onclick: async () => { try { await navigator.clipboard.writeText(code); toast('已複製分享碼 ' + code); } catch {} } }, [icon('i-copy'), '複製分享碼']),
+  ]));
+
+  // QR — friend can scan to open instantly (needs internet to render the QR image)
+  b.appendChild(el('.tiny.muted-3', { style: { margin: '16px 0 8px' }, text: '或讓朋友掃這個 QR 碼：' }));
+  const qr = el('img', { alt: 'QR', loading: 'lazy', src: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' + encodeURIComponent(link), style: { width: '184px', height: '184px', display: 'block', margin: '0 auto', borderRadius: '14px', background: '#fff', padding: '8px', boxShadow: 'var(--shadow-1)' } });
+  qr.onerror = () => { qr.style.display = 'none'; };
+  b.appendChild(qr);
+
+  // Manage access
+  b.appendChild(el('.tiny.muted-3', { style: { margin: '18px 0 6px', fontWeight: '700' }, text: '可存取的人' }));
+  b.appendChild(el('p', { class: 'tiny muted-3', style: { lineHeight: '1.7', margin: '0 0 10px' }, text: '任何拿到上面連結／分享碼的人，都能載入一份「自己的可編輯副本」。對方的修改不會影響你的版本。' }));
+  b.appendChild(el('button.btn.btn--block', { style: { color: 'var(--sakura)' }, onclick: async () => {
+    if (!confirm('關閉這個邀請連結？已加入的人手上的副本會保留，但這條連結／分享碼將失效，需要時可重新產生新的。')) return;
+    await revokeShare(id); closeSheets(); toast('已關閉邀請連結');
+  } }, [icon('i-trash'), '關閉此邀請連結']));
+}
+
+function openLoadSharedSheet() {
+  $('#sheetTitle').textContent = '載入共享行程';
+  const b = clear($('#sheetBody'));
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: '輸入同行者給你的分享碼，或貼上邀請連結，即可加入一份可自己編輯的副本。' }));
+  b.appendChild(el('label', { class: 'tiny muted-3', style: { marginTop: '10px', display: 'block' }, text: '分享碼或連結' }));
+  const inp = el('input', { type: 'text', placeholder: '例：a1b2c3 或 https://…?plan=a1b2c3', style: inputStyle() });
+  b.appendChild(inp);
+  const go = () => { let c = inp.value.trim(); if (!c) return; if (c.includes('plan=')) c = c.split('plan=')[1].split('&')[0]; closeSheets(); importSharedCode(c.trim()); };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '14px' }, onclick: go }, ['載入行程']));
+  openSheet('sheet');
+  setTimeout(() => inp.focus(), 120);
 }
 function importSharedFromURL() {
   const c = new URLSearchParams(location.search).get('plan');
   if (c) { history.replaceState(null, '', location.pathname); importSharedCode(c); return true; }
   return false;
+}
+
+// ---- Export: high-quality PDF + calendar (.ics) + JSON backup -----------------
+// Model-based so it exports the CORRECT plan (any country) without touching the live trip.
+function sanitizeFile(s) { return (String(s || 'plan').replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_').slice(0, 48)) || 'plan'; }
+function icsEsc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+function cityNameIn(model, key) { const c = (model.cities || []).find(x => x.key === key); return c ? c.name : ''; }
+
+function openExportSheet(id) {
+  const m = plansMeta().find(p => p.id === id);
+  const title = m ? m.title : TRIP.title;
+  $('#sheetTitle').textContent = '匯出計畫';
+  const b = clear($('#sheetBody'));
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: `匯出「${title}」的行程與各種資料。` }));
+  b.appendChild(exportRow('📄', '高品質 PDF 計畫表', '逐日時間表＋路線＋票券＋預算＋打包＋緊急聯絡；列印或「另存為 PDF」', () => { closeSheets(); setTimeout(() => exportPlanPDF(id, title), 120); }));
+  b.appendChild(exportRow('🗓️', '行事曆 .ics', '把每日行程匯入 Google／Apple 行事曆', () => exportPlanICS(id, title)));
+  b.appendChild(exportRow('🧾', 'JSON 完整備份', '保存或日後重新匯入、轉移裝置', () => exportPlanJSON(id, title)));
+  b.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '14px', lineHeight: '1.6' }, text: '提示：PDF 會開啟列印視窗，於「目的地」選「另存為 PDF」即可獲得高品質、可選取文字的計畫表。' }));
+  openSheet('sheet');
+}
+function exportRow(emoji, t, d, onclick) {
+  return el('button.exp-row', { onclick }, [
+    el('.exp-row__ic', { text: emoji }),
+    el('.exp-row__tx', {}, [el('b', { text: t }), el('.tiny.muted-3', { text: d })]),
+    el('span.exp-row__go', {}, [icon('i-chevron')]),
+  ]);
+}
+function exportPlanJSON(id, title) {
+  if (id === currentPlanId) snapshotCurrent();
+  const st = store.get('kp_state:' + id, templateSnapshot());
+  const payload = { app: 'Plan AI', kind: 'plan-backup', v: 3, exportedAt: new Date().toISOString(), meta: { title }, state: st };
+  downloadText(sanitizeFile(title) + '.json', JSON.stringify(payload, null, 2), 'application/json');
+  toast('已匯出 JSON 備份');
+}
+function exportPlanICS(id, title) {
+  const model = planModelFor(id);
+  const days = model.days || [];
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Plan AI//TW//ZH', 'CALSCALE:GREGORIAN'];
+  days.forEach((d, i) => {
+    if (!d.date) return;
+    const dt = d.date.replace(/-/g, '');
+    const dd = new Date(d.date + 'T00:00:00'); dd.setDate(dd.getDate() + 1);
+    const end = `${dd.getFullYear()}${pad(dd.getMonth() + 1)}${pad(dd.getDate())}`;
+    const its = (d.items || []).filter(x => x && x.type !== 'stay');
+    const sched = its.map(x => `${x.time} ${x.title}`).join('\n');
+    const city = cityNameIn(model, d.cityKey);
+    L.push('BEGIN:VEVENT', `UID:planai-${id}-d${i + 1}-${dt}@planai`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${dt}`, `DTEND;VALUE=DATE:${end}`,
+      `SUMMARY:${icsEsc(`Day ${i + 1} ${city} — ${d.title || ''}`)}`, `DESCRIPTION:${icsEsc(sched)}`, 'END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  downloadText(sanitizeFile(title) + '.ics', L.join('\r\n'), 'text/calendar');
+  toast('已匯出行事曆 .ics');
+}
+function ensurePrintRoot() { let r = document.getElementById('printRoot'); if (!r) { r = document.createElement('div'); r.id = 'printRoot'; document.body.appendChild(r); } return r; }
+function exportPlanPDF(id, title) {
+  ensurePrintRoot().innerHTML = buildPrintHTML(planModelFor(id), title);
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { try { window.print(); } catch { done(); toast('此裝置無法開啟列印'); } }, 80);
+}
+function buildPrintHTML(model, title) {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const cur = (model.currency && model.currency.symbol) || '¥';
+  const money = n => cur + Number(n || 0).toLocaleString('en-US');
+  const days = model.days || [];
+  const range = days.length ? `${fmtMD(days[0].date)}–${fmtMD(days[days.length - 1].date)}`
+    : ((model.trip && model.trip.start) ? `${fmtMD(model.trip.start)}–${fmtMD(model.trip.end)}` : '');
+  const daysHTML = days.map((d, i) => {
+    const rows = (d.items || []).filter(Boolean).map(x => {
+      const tm = TYPE_META[x.type] || { label: '' };
+      return `<tr><td class="pd-t">${esc(x.time || '')}</td><td class="pd-ty">${esc(tm.label)}</td><td class="pd-ti"><b>${esc(x.title)}</b>${x.desc ? `<div class="pd-d">${esc(x.desc)}</div>` : ''}</td><td class="pd-c">${esc(x.cost || '')}</td></tr>`;
+    }).join('');
+    return `<section class="pd-day"><div class="pd-dh"><span class="pd-dn">Day ${i + 1}</span><span class="pd-dd">${esc(fmtMD(d.date))}${d.dow ? `（${esc(d.dow)}）` : ''} · ${esc(cityNameIn(model, d.cityKey))}</span><span class="pd-dt">${esc(d.title || '')}</span></div>${d.summary ? `<p class="pd-sum">${esc(d.summary)}</p>` : ''}<table class="pd-tab"><tbody>${rows}</tbody></table></section>`;
+  }).join('');
+  const routes = model.routes || [];
+  const routesHTML = routes.map(r => `<li><b>${esc(r.from)} → ${esc(r.to)}</b> — ${esc(r.summary || '')}${r.fare ? ` <span class="pd-muted">（${esc(r.fare)}）</span>` : ''}</li>`).join('');
+  const bud = model.budget || { fixed: [], mealsPerDay: 0, hotelPerNight: 0, nights: 0 };
+  let adm = 0; days.forEach(d => (d.items || []).forEach(it => { const s = String(it.cost || ''); const mm = s.replace(/,/g, '').match(/(\d{2,})/); if (mm && /[¥$€£₩฿]/.test(s)) adm += parseInt(mm[1], 10); }));
+  const fixed = (bud.fixed || []).reduce((s, f) => s + (f.amount || 0), 0);
+  const meals = (bud.mealsPerDay || 0) * days.length, hotel = (bud.hotelPerNight || 0) * (bud.nights || 0), total = fixed + adm + meals + hotel;
+  const budgetHTML = (bud.fixed || []).map(f => `<tr><td>${esc(f.label)}</td><td class="pd-c">${money(f.amount)}</td></tr>`).join('')
+    + `<tr><td>門票（行程內合計）</td><td class="pd-c">${money(adm)}</td></tr>`
+    + (bud.mealsPerDay ? `<tr><td>餐食（${days.length} 天 × ${money(bud.mealsPerDay)}）</td><td class="pd-c">${money(meals)}</td></tr>` : '')
+    + (bud.hotelPerNight ? `<tr><td>住宿（${bud.nights} 晚 × ${money(bud.hotelPerNight)}）</td><td class="pd-c">${money(hotel)}</td></tr>` : '')
+    + `<tr class="pd-tot"><td><b>預估總計／每人</b></td><td class="pd-c"><b>${money(total)}</b></td></tr>`;
+  const P = model.pass;
+  const passHTML = P && P.best ? `<b>${esc(P.best)}${P.bestEn ? `（${esc(P.bestEn)}）` : ''}</b>${P.price ? ` · ${esc(P.price)}` : ''}${P.days ? ` / ${esc(P.days)}` : ''}<ul class="pd-ul">${(P.highlights || []).map(h => `<li>${esc(h)}</li>`).join('')}</ul>` : '';
+  const packHTML = (model.packing || []).map(p => `<li>☐ ${esc(p)}</li>`).join('');
+  const em = model.emergency || { numbers: [], offices: [] };
+  const emHTML = (em.numbers || []).map(n => `<li>${esc(n.emoji || '📞')} ${esc(n.label)}：<b>${esc(n.num)}</b></li>`).join('')
+    + (em.offices || []).map(o => `<li>🏛️ ${esc(o.name)}：${esc(o.tel)}${o.emg ? `（急難 ${esc(o.emg)}）` : ''}</li>`).join('');
+  const base = (model.trip && model.trip.base) || '';
+  const block = (h, inner) => inner ? `<section class="pd-block"><h2>${h}</h2>${inner}</section>` : '';
+  return `<div class="pdoc">
+    <header class="pd-cover"><div class="pd-brand">PLAN AI</div><h1 class="pd-title">${esc(title)}</h1><div class="pd-meta">${esc(range)}${days.length ? ` · ${days.length} 天` : ''}${base ? ` · ${esc(base)}` : ''}</div></header>
+    ${block('每日行程', daysHTML)}
+    ${block('交通路線', routesHTML ? `<ul class="pd-ul">${routesHTML}</ul>` : '')}
+    ${block('票券', passHTML ? `<div class="pd-card">${passHTML}</div>` : '')}
+    ${block('預算估算（每人・參考）', `<table class="pd-tab pd-budget"><tbody>${budgetHTML}</tbody></table>`)}
+    ${block('打包清單', packHTML ? `<ul class="pd-cols">${packHTML}</ul>` : '')}
+    ${block('緊急聯絡', emHTML ? `<ul class="pd-ul">${emHTML}</ul>` : '')}
+    <footer class="pd-foot">由 Plan AI 產生 · ${esc(range)}</footer>
+  </div>`;
 }
 
 // ---- Home / Plans rendering ----
@@ -1067,25 +1426,35 @@ function planCard(m) {
       el('.plan-card__meta', {}, [m.id === currentPlanId ? el('span.plan-badge', { text: '目前' }) : null, el('span', { text: '更新 ' + fmtAgo(m.updatedAt) })]),
     ]),
     el('.plan-card__actions', {}, [
-      el('button.iconbtn', { title: '分享', onclick: e => { e.stopPropagation(); sharePlan(m.id); } }, [icon('i-share')]),
+      el('button.iconbtn', { title: '匯出（PDF／行事曆／備份）', onclick: e => { e.stopPropagation(); openExportSheet(m.id); } }, [icon('i-install')]),
+      el('button.iconbtn', { title: '邀請朋友', onclick: e => { e.stopPropagation(); openShareSheet(m.id); } }, [icon('i-share')]),
       el('button.iconbtn', { title: '重新命名', onclick: e => { e.stopPropagation(); const t = prompt('行程名稱', m.title); if (t) renamePlan(m.id, t.trim()); } }, [icon('i-plan')]),
       el('button.iconbtn', { title: '刪除', onclick: e => { e.stopPropagation(); if (confirm('刪除「' + m.title + '」？此動作無法復原。')) deletePlan(m.id); } }, [icon('i-trash')]),
     ]),
   ]);
 }
 function templateCard() {
-  const card = el('.plan-card.plan-card--tpl', { onclick: () => { const id = createPlan({ title: '九州・瀨戶內・關西' }); openPlan(id); toast('已從範本建立新行程'); } }, [
+  const card = el('.plan-card.plan-card--tpl', { onclick: () => { const id = createPlan({ title: '九州・瀨戶內・關西', model: kyushuModel(), base: 'kyushu', emoji: '🗾' }); openPlan(id); toast('已從範本建立新行程'); } }, [
     el('.plan-card__ico', { text: '🗾' }),
     el('.plan-card__body', {}, [el('.plan-card__title', { text: '九州・瀨戶內・關西 8 日' }), el('.plan-card__meta', {}, [el('span.plan-badge.plan-badge--tpl', { text: '範本' }), el('span', { text: '點此複製一份來編輯' })])]),
-    el('.plan-card__actions', {}, [el('button.iconbtn', { title: '用 AI 建立', onclick: e => { e.stopPropagation(); aiNewPlan('九州行程'); } }, [icon('i-ai')])]),
   ]);
-  // also a "load shared" entry
-  const loadShared = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => { const c = prompt('輸入分享碼或貼上分享連結'); if (c) importSharedCode(c.includes('plan=') ? c.split('plan=')[1] : c.trim()); } }, [
+  // AI from blank — any country
+  const aiCard = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => aiCreatePlan('') }, [
+    el('.plan-card__ico', { text: '✨' }),
+    el('.plan-card__body', {}, [el('.plan-card__title', { text: '用 AI 從零建立（任何國家）' }), el('.plan-card__meta', {}, [el('span.plan-badge', { style: { background: 'var(--brand-2)', color: '#fff' }, text: 'AI' }), el('span', { text: '說出目的地與日期，自動排好整趟' })])]),
+    el('.plan-card__actions', {}, [el('button.iconbtn', { title: '用 AI 建立', onclick: e => { e.stopPropagation(); aiCreatePlan(''); } }, [icon('i-ai')])]),
+  ]);
+  // blank manual start
+  const blankCard = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => { aiNewPlan('我的行程'); } }, [
+    el('.plan-card__ico', { text: '✏️' }),
+    el('.plan-card__body', {}, [el('.plan-card__title', { text: '從空白開始（自己編）' }), el('.plan-card__meta', {}, [el('span', { text: '建立空白行程，手動或請 AI 填寫' })])]),
+  ]);
+  // load shared
+  const loadShared = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => openLoadSharedSheet() }, [
     el('.plan-card__ico', { text: '🔗' }),
     el('.plan-card__body', {}, [el('.plan-card__title', { text: '載入共享行程' }), el('.plan-card__meta', {}, [el('span', { text: '用同行者給的分享碼／連結' })])]),
   ]);
-  const wrap = el('div', {}, [card, loadShared]);
-  return wrap;
+  return el('div', {}, [card, aiCard, blankCard, loadShared]);
 }
 
 // ---- Account / Firebase ----
@@ -1093,8 +1462,12 @@ function ensurePlans() {
   let metas = plansMeta();
   if (!metas.length) {
     const id = uid();
+    const m = kyushuModel();
+    const legacy = store.get('kp_plan', null);    // migrate any legacy single-plan edits
+    if (legacy && Array.isArray(legacy.days)) m.days.forEach((d, i) => { if (legacy.days[i]) d.items = (legacy.days[i].items || legacy.days[i]); });
     setPlansMeta([{ id, title: '九州・瀨戶內・關西', emoji: '🗾', base: 'kyushu', createdAt: Date.now(), updatedAt: Date.now() }]);
-    store.set('kp_state:' + id, exportAll());     // migrate any existing on-device data into plan #1
+    store.set('kp_state:' + id, { v: 3, ts: Date.now(), model: m, extras: readExtras() });
+    store.set('kp_base:' + id, { v: 3, model: kyushuModel() });
     currentPlanId = id; store.set('kp_current', id);
   } else {
     currentPlanId = store.get('kp_current', metas[0].id);
@@ -1146,7 +1519,6 @@ async function onAuthChange(user) {
 // ---------- Init ----------
 function init() {
   initTheme();
-  captureBase();
   ensurePlans();
 
   // tabs
@@ -1188,6 +1560,7 @@ function init() {
   // initial day = today (if in range) else day 1
   const todayEntry = dayByDate[ymd(new Date())];
   selectedDay = todayEntry ? todayEntry.index : 0;
+  if (CITIES[0] && CITIES[0].key) wxCity = CITIES[0].key;
 
   // build static-ish pages
   renderToday();
@@ -1203,7 +1576,7 @@ function init() {
   geminiCtl = initGemini({
     status, goTab, openDay, showOnMap, goWeather, goSouvenirs,
     openMaps: url => window.open(url, '_blank', 'noopener'),
-    planAdd, planRemove, planUpdate, planMove, planReset, newPlan: aiNewPlan,
+    planAdd, planRemove, planUpdate, planMove, planReset, newPlan: aiNewPlan, applyModel,
     notifyAI: (t, b) => Notify.notifyAI(t, b),
   });
 

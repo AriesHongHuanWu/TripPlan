@@ -80,13 +80,20 @@ export function scheduleReminders() {
   });
 }
 
+// Server-push status: 'off' (not attempted) | 'pending' | 'ok' | 'unavailable'
+export function pushStatus() { return store.get('kp_push', 'off'); }
 let pushTried = false;
 export async function registerPush() {
   if (pushTried || !cfg().enabled) return;
-  if (!fb.configured || !fb.user) return;   // server push needs login; local reminders work regardless
+  if (!fb.configured || !fb.user) { store.set('kp_push', 'off'); return; }   // server push needs login; local reminders work regardless
   pushTried = true;
+  store.set('kp_push', 'pending');
   try {
     const token = await getPushToken(VAPID_KEY);
-    if (token) { await saveFcmToken(token); onForegroundMessage(p => { const n = p.notification || {}; notify('chat', n.title || '新通知', n.body || ''); }); }
-  } catch (e) { console.warn('registerPush', e); }
+    if (token) {
+      await saveFcmToken(token);
+      onForegroundMessage(p => { const n = p.notification || {}; notify('chat', n.title || '新通知', n.body || ''); });
+      store.set('kp_push', 'ok');
+    } else { store.set('kp_push', 'unavailable'); }
+  } catch { store.set('kp_push', 'unavailable'); }
 }

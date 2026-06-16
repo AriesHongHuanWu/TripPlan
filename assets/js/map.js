@@ -21,46 +21,63 @@ const RAIL = [
   { name: 'KIX（関空快速）', color: '#4f46e5', dash: true, pts: [[34.7025, 135.4959], [34.6463, 135.5142], [34.4339, 135.2440]] },
 ];
 
+let cityLayers = [];
+let onWeatherCb = null;
+
 export function initMap(onWeather) {
   if (inited || typeof L === 'undefined') return;
   const elMap = document.getElementById('leafmap');
   if (!elMap) return;
   inited = true;
+  onWeatherCb = onWeather;
 
-  map = L.map(elMap, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([34.0, 133.1], 6);
+  map = L.map(elMap, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([20, 130], 4);
   L.tileLayer(tileUrl(), {
     attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, subdomains: 'abcd',
   }).addTo(map);
-  map.fitBounds([[32.55, 130.25], [35.15, 135.95]], { padding: [12, 12] });
-
-  // Rail polylines
-  RAIL.forEach(r => {
-    L.polyline(r.pts, { color: r.color, weight: 4, opacity: .78, dashArray: r.dash ? '5 7' : null, lineCap: 'round' }).addTo(map);
-  });
-
-  // City + POI markers
-  CITIES.forEach(c => {
-    // big city marker
-    const cm = L.marker([c.lat, c.lng], { icon: L.divIcon({ className: '', html: cityMarker(c), iconSize: [34, 34], iconAnchor: [17, 17] }), zIndexOffset: 1000 })
-      .addTo(map).bindPopup(popupHtml({ name: c.name, jp: c.jp, desc: c.blurb, lat: c.lat, lng: c.lng, cityKey: c.key }, onWeather));
-    markerIndex[c.name] = { marker: cm, latlng: [c.lat, c.lng] };
-    // POIs
-    c.pois.forEach(p => {
-      if (p.name === c.station && p.lat === c.lat) return;
-      const pm = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: poiMarker(p, c.color), iconSize: [22, 22], iconAnchor: [11, 11] }) })
-        .addTo(map).bindPopup(popupHtml({ ...p, cityKey: c.key }, onWeather));
-      markerIndex[p.name] = { marker: pm, latlng: [p.lat, p.lng] };
-    });
-  });
 
   // Wire popup weather buttons (event delegation)
   map.on('popupopen', e => {
     const node = e.popup.getElement();
     const btn = node && node.querySelector('[data-wx]');
-    if (btn) btn.addEventListener('click', () => onWeather && onWeather(btn.getAttribute('data-wx')));
+    if (btn) btn.addEventListener('click', () => onWeatherCb && onWeatherCb(btn.getAttribute('data-wx')));
   });
 
+  refreshMap();
   setTimeout(() => map.invalidateSize(), 200);
+}
+
+// Clear + redraw all markers/polylines for the CURRENT trip (any country).
+// Pass { rail:true } to draw the Kyushu JR corridor polylines (template only).
+export function refreshMap(opts = {}) {
+  if (!map) return;
+  cityLayers.forEach(l => { try { map.removeLayer(l); } catch {} });
+  cityLayers = []; markerIndex = {};
+
+  if (opts.rail) RAIL.forEach(r => {
+    cityLayers.push(L.polyline(r.pts, { color: r.color, weight: 4, opacity: .78, dashArray: r.dash ? '5 7' : null, lineCap: 'round' }).addTo(map));
+  });
+
+  const pts = [];
+  CITIES.forEach(c => {
+    if (c.lat == null) return;
+    pts.push([c.lat, c.lng]);
+    const cm = L.marker([c.lat, c.lng], { icon: L.divIcon({ className: '', html: cityMarker(c), iconSize: [34, 34], iconAnchor: [17, 17] }), zIndexOffset: 1000 })
+      .addTo(map).bindPopup(popupHtml({ name: c.name, jp: c.jp, desc: c.blurb, lat: c.lat, lng: c.lng, cityKey: c.key }, onWeatherCb));
+    cityLayers.push(cm); markerIndex[c.name] = { marker: cm, latlng: [c.lat, c.lng] };
+    (c.pois || []).forEach(p => {
+      if (p.lat == null) return;
+      if (p.name === c.station && p.lat === c.lat) return;
+      const pm = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: poiMarker(p, c.color), iconSize: [22, 22], iconAnchor: [11, 11] }) })
+        .addTo(map).bindPopup(popupHtml({ ...p, cityKey: c.key }, onWeatherCb));
+      cityLayers.push(pm); markerIndex[p.name] = { marker: pm, latlng: [p.lat, p.lng] };
+    });
+  });
+
+  if (pts.length >= 2) map.fitBounds(pts, { padding: [40, 40], maxZoom: 12 });
+  else if (pts.length === 1) map.setView(pts[0], 11);
+  else map.setView([20, 0], 2);
+  setTimeout(() => { try { map.invalidateSize(); } catch {} }, 120);
 }
 
 export function refreshMapSize() { if (map) setTimeout(() => map.invalidateSize(), 60); }
@@ -107,8 +124,8 @@ export function focusPlace(name) {
 
 // ---- marker html ----
 function cityMarker(c) {
-  return `<div style="width:34px;height:34px;border-radius:50%;background:${c.color};display:grid;place-items:center;
-    box-shadow:0 3px 10px rgba(0,0,0,.35),0 0 0 3px #fff;font-size:17px;border:0;">${c.flag}</div>`;
+  return `<div style="width:34px;height:34px;border-radius:50%;background:${c.color || '#2563eb'};display:grid;place-items:center;
+    box-shadow:0 3px 10px rgba(0,0,0,.35),0 0 0 3px #fff;font-size:17px;border:0;">${c.flag || '📍'}</div>`;
 }
 function poiMarker(p, color) {
   return `<div style="width:20px;height:20px;border-radius:50%;background:#fff;display:grid;place-items:center;

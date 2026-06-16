@@ -55,19 +55,24 @@ function renderHome() {
   b.appendChild(el('button.btn.btn--block', { style: { marginTop: '14px' }, onclick: exportICS }, ['📅 匯出 8 日行程到行事曆 (.ics)']));
 }
 
+function icsEsc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
 function exportICS() {
   const pad = n => String(n).padStart(2, '0');
-  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//KyushuPlan//TW//ZH', 'CALSCALE:GREGORIAN'];
+  const now = new Date();
+  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Plan AI//TW//ZH', 'CALSCALE:GREGORIAN'];
   DAYS.forEach((d, i) => {
+    if (!d.date) return;
     const dt = d.date.replace(/-/g, '');
     const dd = new Date(d.date + 'T00:00:00'); dd.setDate(dd.getDate() + 1);
     const end = `${dd.getFullYear()}${pad(dd.getMonth() + 1)}${pad(dd.getDate())}`;
-    const sched = d.items.filter(x => x.type !== 'stay').map(x => `${x.time} ${x.title}`).join('\\n');
-    L.push('BEGIN:VEVENT', `UID:kyushu-d${i + 1}@kyushuplan`, `DTSTART;VALUE=DATE:${dt}`, `DTEND;VALUE=DATE:${end}`,
-      `SUMMARY:Day ${i + 1} ${cityByKey[d.cityKey].name} — ${d.title}`, `DESCRIPTION:${sched}`, 'END:VEVENT');
+    const sched = d.items.filter(x => x.type !== 'stay').map(x => `${x.time} ${x.title}`).join('\n');
+    const city = cityByKey[d.cityKey] ? cityByKey[d.cityKey].name : '';
+    L.push('BEGIN:VEVENT', `UID:planai-d${i + 1}-${dt}@planai`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${dt}`, `DTEND;VALUE=DATE:${end}`,
+      `SUMMARY:${icsEsc(`Day ${i + 1} ${city} — ${d.title}`)}`, `DESCRIPTION:${icsEsc(sched)}`, 'END:VEVENT');
   });
   L.push('END:VCALENDAR');
-  downloadText('kyushu-trip-2026.ics', L.join('\r\n'), 'text/calendar');
+  downloadText('plan-ai-trip.ics', L.join('\r\n'), 'text/calendar');
   toast('已匯出行事曆 .ics');
 }
 

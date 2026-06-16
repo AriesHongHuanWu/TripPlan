@@ -143,7 +143,7 @@ input, textarea, select { font: inherit; color: inherit; }
   -webkit-backdrop-filter: saturate(180%) blur(18px);
   border-bottom: 1px solid var(--line);
 }
-.appbar__brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.appbar__brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; }
 .appbar__logo {
   width: 34px; height: 34px; border-radius: 10px;
   background: var(--grad-brand);
@@ -153,8 +153,8 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .appbar__logo svg { width: 20px; height: 20px; }
 .appbar__title { font-weight: 600; font-size: 16px; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.appbar__sub { font-size: 11px; color: var(--text-3); font-weight: 500; }
-.appbar__spacer { flex: 1; }
+.appbar__sub { font-size: 11px; color: var(--text-3); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appbar__spacer { flex: 0 0 0; }
 .iconbtn {
   width: 40px; height: 40px; border-radius: var(--r-pill);
   display: grid; place-items: center; color: var(--text-2);
@@ -716,3 +716,68 @@ main {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---- Export sheet rows ---- */
+.exp-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 13px 14px; margin-top: 10px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); transition: background .15s var(--ease), transform .12s var(--ease); }
+.exp-row:hover { background: var(--surface-2); }
+.exp-row:active { transform: scale(.99); }
+.exp-row__ic { font-size: 22px; flex: none; line-height: 1; }
+.exp-row__tx { min-width: 0; flex: 1; }
+.exp-row__tx b { display: block; font-size: 14.5px; }
+.exp-row__go { color: var(--text-3); display: grid; place-items: center; flex: none; }
+.exp-row__go svg { width: 18px; height: 18px; }
+
+/* ---- Printable PDF plan (#printRoot only renders in print) ---- */
+#printRoot { display: none; }
+@media print {
+  body.printing > *:not(#printRoot) { display: none !important; }
+  body.printing #printRoot { display: block !important; }
+  body.printing { background: #fff !important; }
+  @page { margin: 14mm 12mm; }
+}
+.pdoc { font-family: 'Noto Sans TC', 'Inter', system-ui, sans-serif; color: #111; font-size: 11.5px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
+.pd-cover { border-bottom: 3px solid #2563eb; padding-bottom: 10px; margin-bottom: 14px; }
+.pd-brand { font-weight: 800; letter-spacing: .16em; color: #2563eb; font-size: 11px; }
+.pd-title { font-size: 24px; font-weight: 800; margin: 5px 0 3px; color: #0f172a; }
+.pd-meta { color: #555; font-size: 12px; }
+.pd-block { margin: 0 0 14px; }
+.pd-block > h2 { font-size: 14px; font-weight: 800; color: #1d4ed8; border-left: 4px solid #2563eb; padding-left: 8px; margin: 16px 0 8px; }
+.pd-day { break-inside: avoid; page-break-inside: avoid; margin-bottom: 10px; }
+.pd-dh { display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid #d4d4d8; padding-bottom: 3px; margin-bottom: 4px; }
+.pd-dn { font-weight: 800; color: #2563eb; }
+.pd-dd { color: #444; font-size: 11px; }
+.pd-dt { font-weight: 700; margin-left: auto; color: #0f172a; }
+.pd-sum { color: #555; font-size: 10.5px; margin: 0 0 5px; }
+.pd-tab { width: 100%; border-collapse: collapse; }
+.pd-tab td { padding: 3px 6px; vertical-align: top; border-bottom: 1px solid #eee; }
+.pd-t { white-space: nowrap; font-weight: 700; color: #2563eb; width: 42px; }
+.pd-ty { white-space: nowrap; color: #777; width: 40px; font-size: 10px; }
+.pd-c { white-space: nowrap; text-align: right; color: #333; width: 70px; }
+.pd-d { color: #666; font-size: 10px; margin-top: 1px; }
+.pd-ul { margin: 4px 0; padding-left: 18px; }
+.pd-ul li { margin: 2.5px 0; }
+.pd-cols { columns: 2; column-gap: 24px; margin: 4px 0; padding-left: 18px; list-style: none; }
+.pd-cols li { margin: 2.5px 0; break-inside: avoid; }
+.pd-card { border: 1px solid #d4d4d8; border-radius: 8px; padding: 8px 10px; break-inside: avoid; }
+.pd-budget td { border-bottom: 1px solid #eee; }
+.pd-tot td { border-top: 2px solid #2563eb; border-bottom: none; padding-top: 5px; }
+.pd-muted { color: #888; }
+.pd-foot { margin-top: 16px; padding-top: 8px; border-top: 1px solid #d4d4d8; color: #888; font-size: 10px; text-align: center; }
+
+/* ---- AI generation progress overlay ---- */
+.gen-overlay { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; background: color-mix(in srgb, var(--bg) 68%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.gen-overlay.is-on { display: flex; animation: genFade .25s var(--ease); }
+@keyframes genFade { from { opacity: 0; } to { opacity: 1; } }
+.gen-card { width: 100%; max-width: 380px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 22px; padding: 26px 22px; box-shadow: var(--shadow-2); text-align: center; }
+.gen-spark { width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 16px; background: var(--grad-brand); display: grid; place-items: center; box-shadow: var(--shadow-1); animation: genPulse 1.6s var(--ease) infinite; }
+.gen-spark svg { width: 28px; height: 28px; color: #fff; }
+@keyframes genPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+.gen-title { font-size: 17px; font-weight: 750; }
+.gen-steps { margin-top: 16px; text-align: left; display: flex; flex-direction: column; gap: 10px; }
+.gen-step { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-3); transition: color .3s var(--ease); }
+.gen-step .gen-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-strong); flex: none; transition: all .3s var(--ease); position: relative; }
+.gen-step.is-now { color: var(--text); font-weight: 650; }
+.gen-step.is-now .gen-dot { border-color: var(--brand-2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-2) 18%, transparent); }
+.gen-step.is-done { color: var(--text-2); }
+.gen-step.is-done .gen-dot { background: var(--brand-2); border-color: var(--brand-2); }
+.gen-step.is-done .gen-dot::after { content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }

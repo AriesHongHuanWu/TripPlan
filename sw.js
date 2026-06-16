@@ -1,5 +1,5 @@
 // Service worker — offline shell + installable PWA
-const CACHE = 'kyushu-plan-v8';
+const CACHE = 'planai-v12';
 const ASSETS = [
   './', 'index.html',
   'assets/css/styles.css',
@@ -13,8 +13,8 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => {}));
 });
 
-const EXT = 'kyushu-ext-v7';    // CDN libs/fonts/tiles (Leaflet, Firebase, Google Fonts, map tiles)
-const DATA = 'kyushu-data-v7';  // API responses (Open-Meteo) for offline-last-known
+const EXT = 'planai-ext-v8';    // CDN libs/fonts/tiles (Leaflet, Firebase, Google Fonts, map tiles)
+const DATA = 'planai-data-v8';  // API responses (Open-Meteo) for offline-last-known
 const KEEP = [CACHE, EXT, DATA];
 
 self.addEventListener('activate', e => {

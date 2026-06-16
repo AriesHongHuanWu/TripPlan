@@ -5,7 +5,7 @@
 // 班次/票價標 參考 為代表值 — 以各段內建的 Google 即時/JR 官方連結為準。
 // ============================================================================
 
-export const TRIP = {
+export let TRIP = {
   title: '九州 · 瀨戶內 · 關西',
   subtitle: 'JR 單程自由行 8 日',
   start: '2026-06-17',
@@ -16,7 +16,7 @@ export const TRIP = {
 };
 
 // ---- Cities (map centers + weather points + POIs) ---------------------------
-export const CITIES = [
+export let CITIES = [
   {
     key: 'kumamoto', name: '熊本', jp: 'Kumamoto', flag: '🐻',
     color: '#16a34a', lat: 32.8032, lng: 130.7079, station: '熊本駅',
@@ -88,8 +88,8 @@ export const CITIES = [
     blurb: '瀨戶大橋過海、栗林公園、讚岐烏龍。',
     pois: [
       { name: '高松站', jp: 'Takamatsu Station', lat: 34.3506, lng: 134.0466, emoji: '🚉', tag: 'hub', desc: '岡山搭快速マリンライナー過瀨戶大橋約 55 分（周遊券可用）。' },
-      { name: '栗林公園', jp: 'Ritsurin Garden', lat: 34.3296, lng: 134.0440, emoji: '🌿', tag: 'see', desc: '日本特別名勝；75 公頃回遊庭園，六大池與紫雲山借景。', hours: '六月 05:30–19:00', fee: '¥500' },
-      { name: '玉藻公園 · 高松城', jp: 'Tamamo Park', lat: 34.3501, lng: 134.0504, emoji: '🏯', tag: 'see', desc: '罕見海水堀海城；緊鄰高松站步行 3 分。', hours: '六月 05:30–19:00', fee: '¥200' },
+      { name: '栗林公園', jp: 'Ritsurin Garden', lat: 34.3296, lng: 134.0440, emoji: '🌿', tag: 'see', desc: '日本特別名勝；75 公頃回遊庭園，六大池與紫雲山借景。', hours: '六月 05:30–19:00', fee: '¥410' },
+      { name: '玉藻公園 · 高松城', jp: 'Tamamo Park', lat: 34.3501, lng: 134.0504, emoji: '🏯', tag: 'see', desc: '罕見海水堀海城；緊鄰高松站步行 3 分。', hours: '六月 05:30–19:00', fee: '¥300（2026/4 起）' },
       { name: '屋島', jp: 'Yashima', lat: 34.3437, lng: 134.1013, emoji: '⛰️', tag: 'see', desc: '293m 台地；屋島寺（八十八所第84番）與 Yashimaru 展望台俯瞰瀨戶內海。', hours: '寺 09:00–17:00' },
     ],
   },
@@ -149,38 +149,38 @@ export const CITIES = [
   },
 ];
 
-export const cityByKey = Object.fromEntries(CITIES.map(c => [c.key, c]));
+export let cityByKey = Object.fromEntries(CITIES.map(c => [c.key, c]));
 
 // ---- Inter-city JR journeys (路線 tab「所有班次」) ----------------------------
-export const ROUTES = [
+export let ROUTES = [
   {
     id: 'r-kmj-hkt', from: '熊本', to: '博多', fromStn: '熊本駅', toStn: '博多駅',
     line: '九州新幹線', icon: 'i-train', color: '#16a34a',
-    summary: 'さくら／みずほ 約 35–40 分', fare: '¥5,310（自由席）',
+    summary: 'さくら／みずほ 約 35–40 分', fare: '¥4,700（自由席）／¥5,230（指定）',
     pass: '⚠️ 周遊券「不含」此段，另購',
     legs: [
-      { dep: '08:30', arr: '09:10', line: '九州新幹線 さくら', type: 'shinkansen', dur: '約 40 分', note: '此段為 JR 九州，Setouchi 周遊券不含，請於熊本站另購（自由席 ¥5,310）。みずほ約 35 分。' },
+      { dep: '08:30', arr: '09:10', line: '九州新幹線 さくら', type: 'shinkansen', dur: '約 40 分', note: '此段為 JR 九州，Setouchi 周遊券不含，請於熊本站另購（自由席 ¥4,700／指定席 ¥5,230）。みずほ約 35 分。' },
     ],
     tip: '抵達博多後再啟用 Setouchi 周遊券，之後一路向東到關西全部含於券內。',
   },
   {
     id: 'r-hkt-smk', from: '博多', to: '下關（馬關）', fromStn: '博多駅', toStn: '下関駅',
     line: '山陽新幹線 + 在來線', icon: 'i-route', color: '#e11d48',
-    summary: '新幹線到小倉約 16 分 + 在來線到下關約 15 分', fare: '周遊券可用',
+    summary: '新幹線到小倉約 16 分 + 在來線到下關約 15 分', fare: '新幹線含券；小倉↔下關在來線 ¥340 另付',
     pass: 'Setouchi 周遊券可用（含のぞみ・みずほ）',
     legs: [
       { dep: '09:00', arr: '09:16', line: '山陽新幹線 のぞみ／さくら', type: 'shinkansen', dur: '約 16 分', note: '博多→小倉；下關治在來線。' },
-      { dep: '09:30', arr: '09:45', line: 'JR 山陽本線（小倉→下関，多在門司轉乘）', type: 'local', dur: '約 15 分', note: '¥340；班次頻繁。下關站轉サンデン巴士到唐戸約 9 分 ¥220。' },
+      { dep: '09:30', arr: '09:45', line: 'JR 山陽本線（小倉→下関，多在門司轉乘）', type: 'local', dur: '約 15 分', note: '此段由 JR 九州營運、周遊券不含，另付 ¥340（IC 可）；班次頻繁。下關站轉サンデン巴士到唐戸約 9 分 ¥220。' },
     ],
     tip: '馬關條約景點集中在唐戸；到「下関駅」再轉巴士，勿到「新下関」。',
   },
   {
     id: 'r-smk-hir', from: '下關', to: '廣島', fromStn: '下関駅', toStn: '広島駅',
     line: '在來線 + 山陽新幹線', icon: 'i-route', color: '#2563eb',
-    summary: '在來到小倉約 15 分 + 新幹線到廣島約 50 分', fare: '周遊券可用',
+    summary: '在來到小倉約 15 分 + 新幹線到廣島約 50 分', fare: '新幹線含券；下關↔小倉在來線 ¥340 另付',
     pass: 'Setouchi 周遊券可用',
     legs: [
-      { dep: '15:30', arr: '15:45', line: 'JR 山陽本線（下関→小倉）', type: 'local', dur: '約 15 分', note: '¥340。' },
+      { dep: '15:30', arr: '15:45', line: 'JR 山陽本線（下関→小倉）', type: 'local', dur: '約 15 分', note: '此段由 JR 九州營運、周遊券不含，另付 ¥340。' },
       { dep: '16:00', arr: '16:50', line: '山陽新幹線 のぞみ／さくら', type: 'shinkansen', dur: '約 50 分', note: '小倉→廣島；のぞみ約 48 分。' },
     ],
     tip: '小倉↔廣島每小時多班，回程彈性大。',
@@ -262,7 +262,7 @@ export const ROUTES = [
 ];
 
 // ---- JR Pass recommendation -------------------------------------------------
-export const PASS = {
+export let PASS = {
   best: 'JR West 瀨戶內地區鐵路周遊券',
   bestEn: 'Setouchi Area Pass',
   price: '¥22,000',
@@ -273,7 +273,8 @@ export const PASS = {
     '✅ 含 四國高松（岡山↔高松 快速マリンライナー）',
     '✅ 含 關西在來線（大阪⇄京都⇄奈良）＋ 關西機場（含はるか指定席）',
     '✅ 含 JR 宮島渡輪',
-    '⚠️ 不含 熊本→博多 九州新幹線（約 ¥5,310 另購）與京都⇄新大阪的東海道新幹線',
+    '⚠️ 不含 熊本→博多 九州新幹線（自由席約 ¥4,700 另購）與京都⇄新大阪的東海道新幹線',
+    '⚠️ 小倉↔下關 在來線由 JR 九州營運、不含於券，另付 ¥340（IC 可）；山陽新幹線 博多↔小倉 仍含',
     '🎫 連續 7 日 — 建議 6/19（博多→下關日）啟用，涵蓋到 6/24 關西出發',
   ],
   buy: '官方 JR West 線上預約（WESTER）或 Klook／JTB 等代理；持護照於關西機場／新大阪／岡山／廣島／博多等大站兌換實體券。座位於綠色售票機或綠色窗口免費劃位（含はるか指定席）。',
@@ -287,7 +288,7 @@ export const PASS = {
 };
 
 // ---- Souvenirs (伴手禮) by city ---------------------------------------------
-export const SOUVENIRS = {
+export let SOUVENIRS = {
   kumamoto: [
     { name: '誉の陣太鼓', emoji: '🥁', desc: '香梅出品；求肥包大納言紅豆，太鼓造型罐附切線。', where: '熊本站 肥後よかモン市場', price: '8 入 ¥1,728' },
     { name: '武者がえし', emoji: '🏯', desc: '薄餅皮包羊羹，熊本城石垣主題。', where: '香梅各店', price: '¥1,300–1,700' },
@@ -397,7 +398,7 @@ export const PHRASES = [
   ] },
 ];
 
-export const EMERGENCY = {
+export let EMERGENCY = {
   numbers: [
     { label: '警察（事件・事故・遺失）', num: '110', emoji: '🚓' },
     { label: '火災・救護車', num: '119', emoji: '🚑' },
@@ -417,14 +418,14 @@ export const EMERGENCY = {
   ],
 };
 
-export const PACKING = [
+export let PACKING = [
   '護照 + 影本/電子檔', '回程機票/登機證', 'JR Setouchi 周遊券兌換券', '日幣現金 + 信用卡',
   'ICOCA / Suica 卡', '手機 + 充電器 + 行動電源', 'eSIM / 口袋 WiFi', '萬用轉接頭（日本 A 型）',
   '摺疊傘 / 輕便雨衣（梅雨季）', '防水好走的鞋', '常備藥 + 個人藥品', '保溫瓶',
   '保冷袋（買明太子/河豚用）', '購物環保袋', '健保卡/旅平險資料', '盥洗用品',
 ];
 
-export const CURRENCY = { rate: 0.213, note: '約略匯率（1 日圓 ≈ 0.21 台幣），請依當日銀行匯率為準；可在設定調整。' };
+export let CURRENCY = { rate: 0.213, note: '約略匯率（1 日圓 ≈ 0.21 台幣），請依當日銀行匯率為準；可在設定調整。' };
 
 export const TIPS = {
   taxfree: [
@@ -454,7 +455,7 @@ export const TIPS = {
 };
 
 // ---- Miyajima tide table (大鳥居) — 2026/06, verify live before going --------
-export const TIDE = {
+export let TIDE = {
   floatCm: 250, walkCm: 100,
   note: '潮位 >250cm 可看「海上浮鳥居」；<100cm 可走到鳥居腳下。出發前請以即時潮汐表再確認。',
   days: {
@@ -470,10 +471,10 @@ export const TIDE = {
 };
 
 // ---- Budget defaults --------------------------------------------------------
-export const BUDGET = {
+export let BUDGET = {
   fixed: [
     { label: 'JR Setouchi 周遊券', amount: 22000 },
-    { label: '熊本→博多 九州新幹線', amount: 5310 },
+    { label: '熊本→博多 九州新幹線（自由席）', amount: 4700 },
     { label: '機場巴士 + IC 卡儲值（估）', amount: 6000 },
   ],
   mealsPerDay: 4000,
@@ -491,11 +492,11 @@ export function admissionTotal() {
   return sum;
 }
 
-// ---- 8-day itinerary --------------------------------------------------------
+// ---- 8-day itinerary (Kyushu template) --------------------------------------
 const D = (date, dow, cityKey, weatherKey, title, summary, items) =>
   ({ date, dow, cityKey, weatherKey, title, summary, items });
 
-export const DAYS = [
+export let DAYS = [
   D('2026-06-17', '三', 'kumamoto', 'kumamoto', '抵達熊本 · 熊本城', '桃園 06:00 早班機約 9 點抵熊本，巴士進城；熊本城、城彩苑午餐、くまモン、水前寺，一整天玩好玩滿。', [
     { time: '09:00', type: 'arrive', title: '抵達熊本機場（KMJ）', jp: 'Kumamoto Airport', lat: 32.8372, lng: 130.8553, desc: '桃園 06:00 早班機，約 09:00 抵阿蘇熊本空港；入境、領行李。' },
     { time: '09:45', type: 'move', title: '機場巴士 → 桜町巴士總站', desc: 'リムジンバス直達市區（近熊本城），雨季帶行李最方便。', route: { fromStn: '阿蘇くまもと空港', toStn: '桜町バスターミナル', legs: [{ dep: '09:45', arr: '10:35', line: '產交リムジンバス', type: 'bus', dur: '約 50 分', note: '¥1,200；班次密集。或搭免費空港ライナー到肥後大津轉 JR（不含周遊券）。' }], fare: '¥1,200', pass: '（機場交通不含周遊券）' } },
@@ -510,7 +511,7 @@ export const DAYS = [
   D('2026-06-18', '四', 'fukuoka', 'fukuoka', '熊本 → 博多 · 太宰府', '新幹線到博多（此段另購），太宰府天滿宮、櫛田／運河城，夜訪中洲屋台。', [
     { time: '09:00', type: 'move', title: '熊本 → 博多（九州新幹線）', desc: 'さくら約 40 分；此段周遊券不含，於熊本站另購。', route: ROUTES[0] },
     { time: '10:30', type: 'move', title: '博多 → 太宰府', desc: '地下鐵到天神轉西鐵電車到太宰府。', route: { fromStn: '西鉄福岡（天神）駅', toStn: '太宰府駅', legs: [{ dep: '10:30', arr: '11:10', line: '地下鐵＋西鐵（二日市轉乘）', type: 'private', dur: '約 35–40 分', note: '¥210＋¥480；西鐵非 JR，不含周遊券。' }], fare: '¥690', pass: '（西鐵不含 JR Pass）' } },
-    { time: '11:15', type: 'see', title: '太宰府天滿宮', jp: 'Dazaifu Tenmangū', lat: 33.5214, lng: 130.5350, desc: '學問之神；參道梅ヶ枝餅必嚐。本殿整修中於臨時殿參拜。', cost: '境內免費', dur: '2 小時' },
+    { time: '11:15', type: 'see', title: '太宰府天滿宮', jp: 'Dazaifu Tenmangū', lat: 33.5214, lng: 130.5350, desc: '學問之神；參道梅ヶ枝餅必嚐。本殿已於 2026 年完成整修、恢復常設參拜。', cost: '境內免費', dur: '2 小時' },
     { time: '14:30', type: 'see', title: '櫛田神社 + Canal City', lat: 33.5916, lng: 130.4106, desc: '博多總鎮守，旁為運河購物城（每 30 分噴泉秀）。', dur: '2 小時' },
     { time: '18:30', type: 'eat', title: '中洲屋台 晚餐', lat: 33.5915, lng: 130.4030, desc: '河畔路邊攤：豚骨拉麵・串燒・明太子玉子燒。', dur: '90 分' },
     { time: '20:30', type: 'stay', title: '博多住宿', lat: 33.5899, lng: 130.4207, desc: '明日啟用 Setouchi 周遊券。' },
@@ -538,16 +539,16 @@ export const DAYS = [
   D('2026-06-21', '日', 'takamatsu', 'takamatsu', '四國 · 高松一日', '新幹線到岡山，快速マリンライナー過瀨戶大橋到高松：玉藻公園、栗林公園、讚岐烏龍、屋島。', [
     { time: '08:30', type: 'move', title: '廣島 → 岡山（新幹線）', desc: '山陽新幹線のぞみ／さくら約 38 分。', route: ROUTES[4] },
     { time: '09:20', type: 'move', title: '岡山 → 高松（瀨戶大橋）', desc: '快速マリンライナー過海約 55 分；坐 1 號車上層看跨海大橋。', route: ROUTES[5] },
-    { time: '10:30', type: 'see', title: '玉藻公園 · 高松城', lat: 34.3501, lng: 134.0504, desc: '罕見海水堀海城；緊鄰高松站步行 3 分。', cost: '¥200', dur: '45 分' },
-    { time: '11:30', type: 'see', title: '栗林公園', jp: 'Ritsurin Garden', lat: 34.3296, lng: 134.0440, desc: '日本特別名勝；六大池與紫雲山借景，回遊賞景。', cost: '¥500', dur: '90 分' },
+    { time: '10:30', type: 'see', title: '玉藻公園 · 高松城', lat: 34.3501, lng: 134.0504, desc: '罕見海水堀海城；緊鄰高松站步行 3 分。', cost: '¥300', dur: '45 分' },
+    { time: '11:30', type: 'see', title: '栗林公園', jp: 'Ritsurin Garden', lat: 34.3296, lng: 134.0440, desc: '日本特別名勝；六大池與紫雲山借景，回遊賞景。', cost: '¥410', dur: '90 分' },
     { time: '13:15', type: 'eat', title: '讚岐烏龍 午餐', lat: 34.3506, lng: 134.0466, desc: '香川「烏龍縣」名物；自助セルフ式：自取麵、加湯、加蔥薑天婦羅，最後結帳。', dur: '60 分' },
-    { time: '14:30', type: 'see', title: '屋島 展望台', jp: 'Yashima', lat: 34.3437, lng: 134.1013, desc: 'JR 屋島站轉接駁巴士（¥200）上山；屋島寺與 Yashimaru 展望台俯瞰瀨戶內海。', dur: '2.5 小時' },
+    { time: '14:30', type: 'see', title: '屋島 展望台', jp: 'Yashima', lat: 34.3437, lng: 134.1013, desc: 'JR 屋島站轉接駁巴士（¥200）上山；屋島寺與 Yashimaru 展望台俯瞰瀨戶內海。本日行程較滿，屋島可視時間與體力彈性取捨。', dur: '2.5 小時' },
     { time: '17:30', type: 'move', title: '高松 → 岡山', desc: '快速マリンライナー回岡山（夕陽過大橋）。', route: { fromStn: '高松駅', toStn: '岡山駅', legs: [{ dep: '17:40', arr: '18:35', line: '快速マリンライナー', type: 'rapid', dur: '約 55 分', note: '周遊券可用。' }], fare: '周遊券可用', pass: 'Setouchi 周遊券可用' } },
     { time: '19:00', type: 'stay', title: '岡山住宿', lat: 34.6664, lng: 133.9180, desc: '住岡山站周邊，明日倉敷＋大阪。' },
   ]),
   D('2026-06-22', '一', 'osaka', 'okayama', '倉敷美觀 → 大阪', '上午倉敷美觀地區，午後新幹線到大阪：大阪城、道頓堀。', [
     { time: '09:00', type: 'move', title: '岡山 → 倉敷', desc: 'JR 山陽本線約 17 分 ¥330（周遊券可用）。', route: { fromStn: '岡山駅', toStn: '倉敷駅', legs: [{ dep: '09:00', arr: '09:17', line: 'JR 山陽本線 普通', type: 'local', dur: '約 17 分', note: '¥330；南口步行約 12 分到美觀地區。' }], fare: '周遊券可用', pass: 'Setouchi 周遊券可用' } },
-    { time: '09:40', type: 'see', title: '倉敷美觀地區 + 大原美術館', lat: 34.5950, lng: 133.7716, desc: '江戶白壁倉庫與運河；可搭川舟、逛大原美術館（¥2,000）。', cost: '美術館 ¥2,000', dur: '2.5 小時' },
+    { time: '09:40', type: 'see', title: '倉敷美觀地區（漫步）', lat: 34.5950, lng: 133.7716, desc: '⚠️ 6/22 為週一、大原美術館休館。改漫步江戶白壁倉庫與運河、搭川舟、逛常春藤廣場（Ivy Square）與阿智神社；欲參觀大原美術館請改排在非週一。', cost: '街區免費', dur: '2.5 小時' },
     { time: '12:30', type: 'eat', title: '倉敷 午餐', lat: 34.5950, lng: 133.7716, desc: 'ぶっかけうどん（ふるいち）或岡山ばら寿司。', dur: '60 分' },
     { time: '14:00', type: 'move', title: '岡山 → 大阪（新幹線）', desc: '回岡山轉山陽新幹線到新大阪約 45 分，再到大阪站。', route: ROUTES[6] },
     { time: '16:00', type: 'see', title: '大阪城', jp: 'Osaka Castle', lat: 34.6873, lng: 135.5259, desc: 'JR 大阪城公園站；天守閣與石垣博物館（建議線上購票）。', cost: '¥1,200', dur: '90 分' },
@@ -568,16 +569,82 @@ export const DAYS = [
     { time: '08:30', type: 'move', title: '大阪 → 奈良', desc: 'JR 大和路快速約 50 分（周遊券在來線可用）。', route: ROUTES[8] },
     { time: '09:30', type: 'see', title: '東大寺 + 奈良公園神鹿', jp: 'Tōdai-ji', lat: 34.6889, lng: 135.8398, desc: '世界最大級木造大佛殿；公園放養鹿、鹿仙貝 ¥200。', cost: '東大寺 ¥800', dur: '2.5 小時' },
     { time: '12:00', type: 'eat', title: '奈良 午餐', lat: 34.6822, lng: 135.8316, desc: '柿の葉壽司、釜飯；採購鹿サブレ伴手。', dur: '60 分' },
-    { time: '13:30', type: 'shop', title: '最後採購（奈良 / 回大阪）', lat: 34.7025, lng: 135.4959, desc: '回大阪心齋橋或新大阪駅 エキマルシェ補貨；明太子等冷藏品最後再買並要保冷劑。', dur: '90 分' },
-    { time: '15:30', type: 'move', title: '前往關西機場（KIX）', desc: '由奈良經天王寺轉関空快速，或由大阪/京都搭はるか；19:05 國際線抓 ~16:30 前抵達最穩。', route: ROUTES[9] },
-    { time: '17:00', type: 'stay', title: '抵達 KIX · 辦理登機', lat: 34.4339, lng: 135.2440, desc: '退稅、最後伴手禮；國際線建議起飛前 2–2.5 小時完成報到。' },
+    { time: '13:00', type: 'shop', title: '最後採購（奈良 / 回大阪）', lat: 34.7025, lng: 135.4959, desc: '回大阪心齋橋或新大阪駅 エキマルシェ補貨；明太子等冷藏品最後再買並要保冷劑。', dur: '60 分' },
+    { time: '14:45', type: 'move', title: '前往關西機場（KIX）', desc: '提早出發較穩；由奈良經天王寺轉関空快速（坐前 4 節車廂往關空），或由大阪搭はるか。19:05 國際線建議 ~16:15 前抵達 KIX。', route: ROUTES[9] },
+    { time: '16:15', type: 'stay', title: '抵達 KIX · 辦理登機', lat: 34.4339, lng: 135.2440, desc: '退稅、最後伴手禮；國際線建議起飛前 2.5–3 小時完成報到（行李託運櫃台多於起飛前 60 分關閉）。' },
     { time: '19:05', type: 'depart', title: '關西機場起飛 → 21:10 桃園', jp: 'Kansai Airport', lat: 34.4339, lng: 135.2440, desc: '班機 KIX 19:05 起飛、21:10 抵達桃園。八日九州・瀨戶內・關西之旅圓滿！' },
   ]),
 ];
 
 // Quick lookups
-export const dayByDate = Object.fromEntries(DAYS.map((d, i) => [d.date, { ...d, index: i }]));
-export const allPois = CITIES.flatMap(c => c.pois.map(p => ({ ...p, cityKey: c.key, cityName: c.name, color: c.color })));
+export let dayByDate = Object.fromEntries(DAYS.map((d, i) => [d.date, { ...d, index: i }]));
+export let allPois = CITIES.flatMap(c => c.pois.map(p => ({ ...p, cityKey: c.key, cityName: c.name, color: c.color })));
+
+// ============================================================================
+// Dynamic trip model — swap the entire dataset at runtime so ANY country works.
+// The Kyushu data above is the immutable TEMPLATE; setTrip() reassigns the live
+// (let) bindings, and every consumer (main/map/weather/gemini/toolkit) reads
+// them as ES-module live bindings, so the whole app re-points to the new trip.
+// ============================================================================
+const _clone = x => (typeof structuredClone === 'function' ? structuredClone(x) : JSON.parse(JSON.stringify(x)));
+const _CAT_LABELS = BUDGET.catLabels;
+const KYUSHU_TEMPLATE = _clone({
+  trip: TRIP, cities: CITIES, routes: ROUTES, days: DAYS,
+  pass: PASS, souvenirs: SOUVENIRS, tide: TIDE, budget: BUDGET,
+  currency: CURRENCY, emergency: EMERGENCY, packing: PACKING,
+});
+
+export function kyushuModel() { return _clone(KYUSHU_TEMPLATE); }
+
+export function blankModel(opts = {}) {
+  const days = Number(opts.days) || 0;
+  return {
+    trip: {
+      title: opts.title || '新行程', subtitle: opts.subtitle || '我的旅程',
+      start: opts.start || '', end: opts.end || '', days,
+      base: opts.base || '', note: '', country: opts.country || '',
+    },
+    cities: [], routes: [], days: [],
+    pass: null, souvenirs: {}, tide: null,
+    budget: { fixed: [], mealsPerDay: 4000, hotelPerNight: 9000, nights: Math.max(0, days - 1), catLabels: _CAT_LABELS },
+    currency: _clone(KYUSHU_TEMPLATE.currency),
+    emergency: _clone(KYUSHU_TEMPLATE.emergency),
+    packing: _clone(KYUSHU_TEMPLATE.packing),
+  };
+}
+
+function recompute() {
+  cityByKey = Object.fromEntries((CITIES || []).map(c => [c.key, c]));
+  dayByDate = Object.fromEntries((DAYS || []).map((d, i) => [d.date, { ...d, index: i }]));
+  allPois = (CITIES || []).flatMap(c => (c.pois || []).map(p => ({ ...p, cityKey: c.key, cityName: c.name, color: c.color })));
+}
+
+export function setTrip(model) {
+  if (!model) return;
+  TRIP = model.trip || TRIP;
+  CITIES = Array.isArray(model.cities) ? model.cities : [];
+  ROUTES = Array.isArray(model.routes) ? model.routes : [];
+  DAYS = Array.isArray(model.days) ? model.days : [];
+  PASS = model.pass || null;
+  SOUVENIRS = model.souvenirs || {};
+  TIDE = model.tide || null;
+  BUDGET = model.budget || { fixed: [], mealsPerDay: 4000, hotelPerNight: 9000, nights: Math.max(0, (DAYS.length || 1) - 1), catLabels: _CAT_LABELS };
+  if (BUDGET && !BUDGET.catLabels) BUDGET.catLabels = _CAT_LABELS;
+  CURRENCY = model.currency || CURRENCY;
+  EMERGENCY = model.emergency || EMERGENCY;
+  PACKING = Array.isArray(model.packing) ? model.packing : PACKING;
+  recompute();
+}
+
+// Snapshot the live trip as a plain model (for per-plan persistence).
+export function currentModel() {
+  return {
+    trip: TRIP, cities: CITIES, routes: ROUTES,
+    days: DAYS.map(d => ({ date: d.date, dow: d.dow, cityKey: d.cityKey, weatherKey: d.weatherKey, title: d.title, summary: d.summary, items: d.items })),
+    pass: PASS, souvenirs: SOUVENIRS, tide: TIDE, budget: BUDGET,
+    currency: CURRENCY, emergency: EMERGENCY, packing: PACKING,
+  };
+}
 
 // Type metadata for badges/icons
 export const TYPE_META = {

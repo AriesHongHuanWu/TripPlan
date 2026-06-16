@@ -68,7 +68,13 @@ export async function getPushToken(vapidKey) {
     if (!messaging) messaging = M.getMessaging(app);
     const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
     return (await M.getToken(messaging, { vapidKey, serviceWorkerRegistration: reg })) || null;
-  } catch (e) { console.warn('getPushToken', e); return null; }
+  } catch (e) {
+    // Server-push token registration failed (commonly because the "Firebase Cloud
+    // Messaging API" / "Firebase Installations API" aren't enabled in Google Cloud,
+    // or the web API key is restricted). LOCAL itinerary reminders are unaffected.
+    console.info('[Plan AI] 伺服器推播暫不可用（本地提醒仍正常）。如需 App 關閉時也收到推播，請在 Google Cloud 啟用 Firebase Cloud Messaging API 與 Firebase Installations API。');
+    return null;
+  }
 }
 export function onForegroundMessage(cb) { try { if (M && messaging) M.onMessage(messaging, cb); } catch {} }
 export async function saveFcmToken(token) {

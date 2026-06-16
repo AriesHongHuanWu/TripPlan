@@ -1,10 +1,9 @@
 // ============================================================================
 // weather.js — Open-Meteo live forecast (no API key). Per-city, JST.
 // ============================================================================
-import { CITIES, cityByKey, wmo, DAYS } from './data.js';
+import { CITIES, cityByKey, wmo, DAYS, TRIP } from './data.js';
 import { el, clear, icon, ymd, toast } from './util.js';
 
-const TRIP_END = '2026-06-24';
 const cache = new Map();           // key -> {data, ts}
 const TTL = 15 * 60 * 1000;        // 15 min
 
@@ -14,10 +13,14 @@ export async function fetchWeather(city) {
   if (hit && Date.now() - hit.ts < TTL) return hit.data;
 
   const today = ymd(new Date());
-  const end = today > TRIP_END ? today : TRIP_END;
+  // Forecast window: today → trip end, capped to Open-Meteo's ~16-day horizon.
+  const horizon = new Date(); horizon.setDate(horizon.getDate() + 15); const maxEnd = ymd(horizon);
+  const tripEnd = (TRIP && TRIP.end) ? TRIP.end : today;
+  let end = today > tripEnd ? today : tripEnd;
+  if (end > maxEnd) end = maxEnd;
   const u = new URL('https://api.open-meteo.com/v1/forecast');
   u.search = new URLSearchParams({
-    latitude: city.lat, longitude: city.lng, timezone: 'Asia/Tokyo',
+    latitude: city.lat, longitude: city.lng, timezone: 'auto',
     current: 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
     hourly: 'temperature_2m,precipitation_probability,weather_code',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset',
@@ -52,6 +55,7 @@ function cityTripDates(cityKey) {
 export async function renderWeatherCity(cityKey, root) {
   const city = cityByKey[cityKey] || CITIES[0];
   clear(root);
+  if (!city || city.lat == null) { root.appendChild(el('.empty', {}, [el('.empty__emoji', { text: '🧭' }), el('div', { text: '尚未規劃行程' }), el('.tiny.muted', { style: { marginTop: '6px' }, text: '到「AI 旅伴」建立行程後即可查看各地天氣' })])); return; }
   root.appendChild(el('.skeleton', { style: { height: '180px', marginBottom: '14px' } }));
   let data;
   try { data = await fetchWeather(city); }
@@ -181,6 +185,7 @@ export function clothingAdvice(s) {
 // Compact current weather for the Today page + Gemini tool
 export async function getCurrentSummary(cityKey) {
   const city = cityByKey[cityKey] || CITIES[0];
+  if (!city || city.lat == null) return null;
   try {
     const data = await fetchWeather(city);
     const cur = data.current, [lab, emo] = wmo(cur.weather_code);

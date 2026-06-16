@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#0a0c12" media="(prefers-color-scheme: dark)" />
-<meta name="description" content="九州・瀨戶內・關西 8 日 JR 單程自由行（熊本進・關西出）完整規劃 — 即時天氣、路線導航、伴手禮指南與 Gemini AI 旅伴。" />
+<meta name="description" content="Plan AI — 用 AI 規劃、編輯與共享你的旅程：完整逐日行程、即時天氣、路線導航、預算與旅遊錦囊，並可匯出高品質 PDF 計畫表。" />
+<meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="九州遊" />
-<title>九州 · 瀨戶內 · 關西 — JR 單程自由行規劃</title>
+<meta name="apple-mobile-web-app-title" content="Plan AI" />
+<title>Plan AI — 智慧旅程規劃</title>
 
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
@@ -85,8 +86,8 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
 <div id="splash">
   <div class="splash-inner">
     <div class="splash-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4" fill="#fff" stroke="none"/></svg></div>
-    <div class="splash-title">九州 · 瀨戶內 · 關西</div>
-    <div class="splash-sub">JR 單程自由行 · 6/17–6/24</div>
+    <div class="splash-title">Plan AI</div>
+    <div class="splash-sub">AI 智慧旅程規劃</div>
     <div class="splash-bar"></div>
   </div>
 </div>
@@ -96,8 +97,8 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
   <div class="home">
     <div class="home__logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4" fill="#fff" stroke="none"/></svg></div>
     <div class="home__eyebrow">AI TRIP PLANNER</div>
-    <h1 class="home__title">旅程規劃師</h1>
-    <p class="home__sub">登入後自動儲存每一份行程，隨時用 AI 旅伴調整、與同行者共享。</p>
+    <h1 class="home__title">Plan AI</h1>
+    <p class="home__sub">用 AI 規劃旅程、自動雲端儲存，隨時調整、匯出 PDF 與同行者共享。</p>
     <div class="home__features" id="homeFeatures"></div>
     <button class="btn btn--block btn-google" id="googleSignIn">
       <svg class="gicon" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
@@ -148,7 +149,7 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
       <div class="appbar__logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4" fill="#fff" stroke="none"/></svg></div>
       <div class="stack" style="min-width:0">
         <span class="appbar__title" id="appbarTitle">九州 · 瀨戶內 · 關西</span>
-        <span class="appbar__sub" id="appbarSub">熊本進 · 關西出 · 6/17–6/24</span>
+        <span class="appbar__sub" id="appbarSub">6/17–6/24 · 8 天</span>
       </div>
     </div>
     <div class="appbar__spacer"></div>
