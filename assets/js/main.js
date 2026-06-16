@@ -1456,9 +1456,9 @@ function roleSelect(value, opts, onChange) {
 }
 const validEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e || '');
 // Build the SAFE public feed metadata from a collab doc (never copies model/members/emails/access).
-function buildFeedMeta(doc, visibility, themes) {
+function buildFeedMeta(doc, visibility, themes, countryOverride) {
   const model = (doc && doc.model) || {}; const trip = model.trip || {};
-  const country = (trip.country || '').trim();
+  const country = ((countryOverride != null ? countryOverride : trip.country) || '').trim();
   let ownerName = (doc.members && doc.owner && doc.members[doc.owner] && doc.members[doc.owner].name)
     || (fb.user && fb.user.displayName) || '旅人';
   if (ownerName.includes('@')) ownerName = ownerName.split('@')[0];   // never leak a full email into the PUBLIC feed
@@ -1500,14 +1500,19 @@ async function openShareSheet(id) {
   if (!code) { loading.textContent = '無法建立共享連結'; return; }
   const link = location.origin + location.pathname + '?join=' + code;
   let pubThemes = [];          // travel-mode tags for the feed listing (persist across re-paints)
+  let pubCountry = '';         // listing country (region auto-derives); editable when publishing
   let pubInit = false;
-  let tagPubT = null;          // debounce timer for tag re-publish
+  let tagPubT = null;          // debounce timer for tag/country re-publish
 
   // (Re)render the whole body from the latest doc state.
   async function paint() {
     if ($('#sheetTitle').textContent !== '分享與權限') return;   // user navigated away
     let doc = null; try { doc = await collabGet(code); } catch {}
-    if (!pubInit) { try { const ff = await feedGet(code); if (ff && Array.isArray(ff.themes)) pubThemes = ff.themes.slice(); } catch {} pubInit = true; }
+    if (!pubInit) {
+      try { const ff = await feedGet(code); if (ff && Array.isArray(ff.themes)) pubThemes = ff.themes.slice(); if (ff && ff.country) pubCountry = ff.country; } catch {}
+      if (!pubCountry) pubCountry = (((doc && doc.model) || {}).trip || {}).country || '';
+      pubInit = true;
+    }
     const role = roleForDoc(doc) || (doc && fb.user && doc.owner === fb.user.uid ? 'owner' : 'editor');
     const owner = role === 'owner';
     const access = (doc && doc.access) || { general: 'editor', people: {} };
@@ -1564,7 +1569,7 @@ async function openShareSheet(id) {
             const g = (doc.access && doc.access.general) || 'editor';
             if (g === 'editor' || g === 'commenter') await collabSetGeneral(code, 'viewer');
             await collabSave(code, { visibility: v });
-            await feedPublish(code, buildFeedMeta(doc, v, pubThemes));
+            await feedPublish(code, buildFeedMeta(doc, v, pubThemes, pubCountry));
           }
           communityLoaded = false;   // feed changed → refresh on next 社群 open
           toast(v === 'private' ? '已設為私人' : v === 'link' ? '已設為知道連結的人' : v === 'public' ? '已設為公開' : '已發佈到社群 🌟');
@@ -1577,19 +1582,25 @@ async function openShareSheet(id) {
       body.appendChild(visRow);
       body.appendChild(el('.tiny.muted-3', { style: { margin: '4px 2px 0', lineHeight: '1.6' }, text: (VIS_OPTS.find(o => o[0] === visibility) || [])[2] || '' }));
       if (visibility === 'public' || visibility === 'community') {
-        const country = (((doc.model || {}).trip || {}).country || '').trim();
-        body.appendChild(el('.tiny.muted-3', { style: { margin: '10px 2px 4px' }, text: '旅行模式標籤（幫助別人找到你的行程）' }));
-        const tRow = el('.chiprow', { style: { flexWrap: 'wrap' } });
-        // Coalesce a burst of tag taps into ONE re-publish (avoids write amplification).
+        // Coalesce a burst of tag/country edits into ONE re-publish (avoids write amplification).
         const schedulePublish = () => { clearTimeout(tagPubT); tagPubT = setTimeout(async () => {
-          try { await feedPublish(code, buildFeedMeta(doc, visibility, pubThemes)); communityLoaded = false; } catch (err) { toast('更新失敗：' + (err && err.message || '')); }
+          try { await feedPublish(code, buildFeedMeta(doc, visibility, pubThemes, pubCountry)); communityLoaded = false; } catch (err) { toast('更新失敗：' + (err && err.message || '')); }
         }, 450); };
+        // Country (so 國家/區域 filters work even for plans without a country); region auto-derives.
+        body.appendChild(el('.tiny.muted-3', { style: { margin: '10px 2px 4px' }, text: '國家（讓別人能用國家／區域篩選到你）' }));
+        const regionHint = el('.tiny.muted-3', { style: { margin: '4px 2px 0' }, text: pubCountry ? (regionOf(pubCountry) ? '區域：' + regionOf(pubCountry) : '（此國家尚未對應到區域，仍可用國家篩選）') : '建議填寫，否則不會出現在國家／區域篩選結果' });
+        const dl = el('datalist', { id: 'countryList' }, Object.keys(COUNTRY_TO_REGION).map(c => el('option', { value: c })));
+        const cIn = el('input', { type: 'text', list: 'countryList', value: pubCountry, placeholder: '例：日本、法國、泰國…', style: { ...inputStyle(), marginTop: '0' } });
+        cIn.addEventListener('input', () => { pubCountry = cIn.value.trim(); regionHint.textContent = pubCountry ? (regionOf(pubCountry) ? '區域：' + regionOf(pubCountry) : '（此國家尚未對應到區域，仍可用國家篩選）') : '建議填寫，否則不會出現在國家／區域篩選結果'; schedulePublish(); });
+        body.appendChild(cIn); body.appendChild(dl); body.appendChild(regionHint);
+        // Travel-mode tags.
+        body.appendChild(el('.tiny.muted-3', { style: { margin: '12px 2px 4px' }, text: '旅行模式標籤（幫助別人找到你的行程）' }));
+        const tRow = el('.chiprow', { style: { flexWrap: 'wrap' } });
         TRAVEL_THEMES.forEach(t => tRow.appendChild(el('button.chip.chip--tap' + (pubThemes.includes(t) ? '.is-on' : ''), { onclick: e => {
           const i = pubThemes.indexOf(t); if (i >= 0) { pubThemes.splice(i, 1); e.currentTarget.classList.remove('is-on'); } else { pubThemes.push(t); e.currentTarget.classList.add('is-on'); }
           schedulePublish();
         } }, t)));
         body.appendChild(tRow);
-        body.appendChild(el('.tiny.muted-3', { style: { margin: '6px 2px 0' }, text: '國家：' + (country || '未填（建議在行程設定國家）') + (regionOf(country) ? ' · 區域：' + regionOf(country) : '') }));
       }
     } else {
       // Non-owner: show own role only.
@@ -1974,7 +1985,7 @@ function renderPlans() {
   const mineR = $('#mineRoot'), comR = $('#communityRoot');
   if (mineR) mineR.hidden = communityMode;
   if (comR) comR.hidden = !communityMode;
-  $$('#plansSeg .plans-seg__btn').forEach(b => b.classList.toggle('is-on', (b.dataset.seg === 'community') === communityMode));
+  $$('#plansSeg .plans-seg__btn').forEach(b => { const sel = (b.dataset.seg === 'community') === communityMode; b.classList.toggle('is-on', sel); b.setAttribute('aria-pressed', sel ? 'true' : 'false'); });
   if (communityMode) renderCommunity();
 }
 function planCard(m) {
@@ -1982,7 +1993,11 @@ function planCard(m) {
     el('.plan-card__ico', { text: m.emoji || '🗺️' }),
     el('.plan-card__body', {}, [
       el('.plan-card__title', { text: m.title }),
-      el('.plan-card__meta', {}, [m.id === currentPlanId ? el('span.plan-badge', { text: '目前' }) : null, el('span', { text: '更新 ' + fmtAgo(m.updatedAt) })]),
+      el('.plan-card__meta', {}, [
+        m.id === currentPlanId ? el('span.plan-badge', { text: '目前' }) : null,
+        m.forkedFrom ? el('span.plan-badge.plan-badge--tpl', { text: '🌟 複製自社群' }) : null,
+        el('span', { text: '更新 ' + fmtAgo(m.updatedAt) }),
+      ]),
     ]),
     el('.plan-card__actions', {}, [
       el('button.iconbtn', { title: '匯出（PDF／行事曆／備份）', onclick: e => { e.stopPropagation(); openExportSheet(m.id); } }, [icon('i-install')]),
@@ -2023,7 +2038,7 @@ function templateCard() {
 // ============================================================================
 function communityTab(on) {
   communityMode = on;
-  $$('#plansSeg .plans-seg__btn').forEach(b => b.classList.toggle('is-on', (b.dataset.seg === 'community') === on));
+  $$('#plansSeg .plans-seg__btn').forEach(b => { const sel = (b.dataset.seg === 'community') === on; b.classList.toggle('is-on', sel); b.setAttribute('aria-pressed', sel ? 'true' : 'false'); });
   const mine = $('#mineRoot'), com = $('#communityRoot');
   if (mine) mine.hidden = on;
   if (com) com.hidden = !on;
@@ -2132,14 +2147,15 @@ function communityCard(f) {
 }
 function likeButton(f) {
   const liked = communityLiked.has(f.code);
-  const b = el('button.like-badge' + (liked ? '.is-on' : ''), { title: '按讚', onclick: e => { e.stopPropagation(); togglePlanLike(f, b); } }, [
-    el('span.like-badge__heart', { text: '♥' }),
+  const b = el('button.like-badge' + (liked ? '.is-on' : ''), { title: '按讚', 'aria-label': '按讚', 'aria-pressed': liked ? 'true' : 'false', onclick: e => { e.stopPropagation(); togglePlanLike(f, b); } }, [
+    el('span.like-badge__heart', { 'aria-hidden': 'true', text: '♥' }),
     el('span.like-badge__n', { text: String(f.likeCount || 0) }),
   ]);
   return b;
 }
 function setLikeUI(btn, liked, n) {
   btn.classList.toggle('is-on', !!liked);
+  btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
   const c = btn.querySelector('.like-badge__n'); if (c) c.textContent = String(Math.max(0, n || 0));
 }
 async function togglePlanLike(f, btn) {

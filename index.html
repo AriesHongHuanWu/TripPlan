@@ -456,9 +456,9 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
   <main class="plans-main">
     <div class="section-head" style="margin-top:4px"><h1 class="h-display">行程計劃</h1></div>
     <!-- 我的計劃 / 社群 segmented toggle -->
-    <div class="plans-seg" id="plansSeg">
-      <button class="plans-seg__btn is-on" data-seg="mine">我的計劃</button>
-      <button class="plans-seg__btn" data-seg="community">🌟 社群</button>
+    <div class="plans-seg" id="plansSeg" role="group" aria-label="切換我的計劃或社群">
+      <button class="plans-seg__btn is-on" data-seg="mine" aria-pressed="true">我的計劃</button>
+      <button class="plans-seg__btn" data-seg="community" aria-pressed="false">🌟 社群</button>
     </div>
     <div id="mineRoot">
       <div class="ai-create">
