@@ -11,7 +11,7 @@ import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.
 import { initMap, refreshMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
 import { initGemini, getCfg, generateTripPlan } from './gemini.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
-import { initFirebase, fb, signInGoogle, signOutUser, pullUserData, pushUserData, shareSave, shareGet } from './firebase.js';
+import { initFirebase, fb, signInGoogle, signOutUser, pullUserData, pushUserData, shareSave, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs } from './firebase.js';
 import * as Notify from './notify.js';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -981,6 +981,15 @@ function hideSplash() {
 let currentPlanId = null;
 let cloudTimer = null;
 
+// ---- Collaborative ("旅伴") live state ----
+let currentCollab = null;        // collab code when the active plan is collaborative
+let collabUnsub = null, msgUnsub = null, collabTimer = null;
+let collabApplying = false;      // guard: don't echo remote changes back
+let collabMsgs = [];             // group-chat messages of the active collab plan
+let collabMembers = {};          // uid -> { name, ts }
+let aiMode = 'ai';               // '旅伴' tab sub-mode: 'ai' (規劃) | 'chat' (同行聊天)
+const CLIENT_ID = Math.random().toString(36).slice(2, 10);   // distinguishes my own writes
+
 const uid = () => Math.random().toString(36).slice(2, 9);
 const plansMeta = () => store.get('kp_plans', []);
 const setPlansMeta = a => store.set('kp_plans', a);
@@ -1020,6 +1029,7 @@ function snapshotCurrent() {
   if (!currentPlanId) return;
   store.set('kp_state:' + currentPlanId, exportAll());
   const arr = plansMeta(); const m = arr.find(p => p.id === currentPlanId); if (m) { m.updatedAt = Date.now(); setPlansMeta(arr); }
+  pushCollab();   // mirror local edits to the live shared plan (if collaborative)
 }
 
 function createPlan({ title, model = null, fromState = null, base = null, emoji = null } = {}) {
@@ -1062,6 +1072,9 @@ function openPlan(id) {
   snapshotCurrent();
   currentPlanId = id; store.set('kp_current', id);
   loadPlanState(id);
+  aiMode = 'ai';
+  const meta = plansMeta().find(p => p.id === id);
+  if (meta && meta.collab && collabReady()) startCollab(meta.collab); else stopCollab();
   renderActivePlan();
   goTab('today'); showScreen('app');
   try { Notify.scheduleReminders(); } catch {}
@@ -1277,10 +1290,12 @@ async function openShareSheet(id) {
   catch (e) { status.textContent = '建立失敗：' + e.message; return; }
   if ($('#sheetTitle').textContent !== '邀請朋友') return;   // sheet changed while awaiting
   status.remove();
+  if (m && m.collab) link = location.origin + location.pathname + '?join=' + m.collab;   // collaborative join link
 
   b.appendChild(el('label', { class: 'tiny muted-3', text: '邀請連結' }));
   const linkIn = el('input', { value: link, readonly: 'readonly', onclick: e => e.target.select(), style: { ...inputStyle(), fontSize: '13px' } });
   b.appendChild(linkIn);
+  const updateLinks = () => { linkIn.value = link; if (qr) qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' + encodeURIComponent(link); };
 
   b.appendChild(el('.grid2', { style: { marginTop: '12px' } }, [
     el('button.btn.btn--brand', { onclick: async () => { try { await navigator.clipboard.writeText(link); toast('已複製邀請連結'); } catch { linkIn.select(); toast('請長按選取後複製'); } } }, [icon('i-copy'), '複製連結']),
@@ -1299,6 +1314,27 @@ async function openShareSheet(id) {
   const qr = el('img', { alt: 'QR', loading: 'lazy', src: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=' + encodeURIComponent(link), style: { width: '184px', height: '184px', display: 'block', margin: '0 auto', borderRadius: '14px', background: '#fff', padding: '8px', boxShadow: 'var(--shadow-1)' } });
   qr.onerror = () => { qr.style.display = 'none'; };
   b.appendChild(qr);
+
+  // Collaborative ("旅伴") toggle — live shared plan + group chat
+  b.appendChild(el('.row-between', { style: { margin: '18px 0 2px', alignItems: 'flex-start' } }, [
+    el('div', { style: { minWidth: '0', paddingRight: '12px' } }, [
+      el('b', { text: '🤝 共同編輯（即時協作）' }),
+      el('.tiny.muted-3', { style: { marginTop: '3px', lineHeight: '1.6' }, text: '開啟後朋友用此連結加入，會一起編輯「同一份」行程，並可在「旅伴 → 同行聊天」即時討論、用 @ai 規劃。' }),
+    ]),
+    toggleSwitch(!!(m && m.collab), async on => {
+      if (on) {
+        if (!collabReady()) { toast('需先用 Google 登入才能共同編輯'); openShareSheet(id); return; }
+        const cc = await enableCollab(id);
+        if (cc) { link = location.origin + location.pathname + '?join=' + cc; updateLinks(); toast('已開啟共同編輯，把連結分享給朋友即可一起規劃'); }
+        else openShareSheet(id);
+      } else {
+        const arr = plansMeta(); const mm = arr.find(p => p.id === id); if (mm) { delete mm.collab; setPlansMeta(arr); }
+        if (id === currentPlanId) stopCollab();
+        link = location.origin + location.pathname + '?plan=' + code; updateLinks();
+        toast('已關閉共同編輯（改為分享可編輯副本）');
+      }
+    }),
+  ]));
 
   // Manage access
   b.appendChild(el('.tiny.muted-3', { style: { margin: '18px 0 6px', fontWeight: '700' }, text: '可存取的人' }));
@@ -1323,9 +1359,136 @@ function openLoadSharedSheet() {
   setTimeout(() => inp.focus(), 120);
 }
 function importSharedFromURL() {
-  const c = new URLSearchParams(location.search).get('plan');
+  const sp = new URLSearchParams(location.search);
+  const join = sp.get('join');
+  if (join) { history.replaceState(null, '', location.pathname); joinCollab(join); return true; }
+  const c = sp.get('plan');
   if (c) { history.replaceState(null, '', location.pathname); importSharedCode(c); return true; }
   return false;
+}
+
+// ============================================================================
+// Collaborative "旅伴": a live shared plan + group chat (needs login + Firestore).
+// Everyone on a collab plan edits the SAME itinerary and shares one chat; in
+// 同行聊天 you can type "@ai …" to hand the message to the AI to plan.
+// ============================================================================
+function stopCollab() {
+  if (collabUnsub) { try { collabUnsub(); } catch {} }
+  if (msgUnsub) { try { msgUnsub(); } catch {} }
+  collabUnsub = msgUnsub = null; currentCollab = null; collabMsgs = []; collabMembers = {};
+}
+function startCollab(code) {
+  if (!collabReady()) return;          // needs login + Firestore
+  stopCollab(); currentCollab = code;
+  collabUnsub = collabOnDoc(code, data => {
+    if (!data) return;
+    collabMembers = data.members || {};
+    if (data.model && data.writer !== CLIENT_ID) {   // apply remote edits (skip my own echo)
+      collabApplying = true;
+      try { setTrip(data.model); currentBase = currentBase || cloneModel(data.model); renderActivePlan(); } finally { collabApplying = false; }
+    }
+    renderCollabHeader();
+  });
+  msgUnsub = collabOnMsgs(code, msgs => { collabMsgs = msgs; if (aiMode === 'chat') renderCollabChat(); renderCollabHeader(); });
+}
+// Push the live trip to the shared doc after a local edit (debounced; skips remote echoes).
+function pushCollab() {
+  if (!currentCollab || collabApplying || !collabReady()) return;
+  const code = currentCollab;
+  clearTimeout(collabTimer);
+  collabTimer = setTimeout(() => { if (currentCollab === code) collabSetPlan(code, cloneModel(currentModel()), CLIENT_ID); }, 700);
+}
+const myName = () => (fb.user && (fb.user.displayName || fb.user.email)) || '我';
+
+// Turn the current/given plan into a collaborative one (from the invite sheet toggle).
+async function enableCollab(id) {
+  if (!collabReady()) { toast('請先用 Google 登入才能開啟共同編輯'); return null; }
+  if (id === currentPlanId) snapshotCurrent();
+  const arr = plansMeta(); const m = arr.find(p => p.id === id);
+  const code = (m && m.collab) || uid();
+  const model = (planModelFor(id));
+  await collabSave(code, { model, meta: { title: m ? m.title : '行程', emoji: m ? m.emoji : '🗺️' }, owner: fb.user.uid, members: { [fb.user.uid]: { name: myName(), ts: Date.now() } }, writer: CLIENT_ID });
+  if (m) { m.collab = code; m.share = code; setPlansMeta(arr); }
+  if (id === currentPlanId) startCollab(code);
+  return code;
+}
+// Open a collab invite link as a LIVE member (not a copy).
+async function joinCollab(code) {
+  showScreen('plans');
+  if (!collabReady()) {
+    // remember intent; if they log in we can join. For now fall back to copy-import.
+    toast('請用 Google 登入即可一起共同編輯；先載入一份副本。');
+    return importSharedCode(code);
+  }
+  try {
+    const data = await collabGet(code);
+    if (!data || !data.model) return toast('找不到此協作行程（可能已關閉）');
+    let arr = plansMeta(); let m = arr.find(p => p.collab === code);
+    let id;
+    if (m) { id = m.id; }
+    else {
+      id = uid();
+      arr.unshift({ id, title: (data.meta && data.meta.title || '共享行程') + '（協作）', emoji: (data.meta && data.meta.emoji) || '🤝', base: 'custom', collab: code, createdAt: Date.now(), updatedAt: Date.now() });
+      setPlansMeta(arr);
+      store.set('kp_state:' + id, { v: 3, ts: Date.now(), model: cloneModel(data.model), extras: {} });
+      store.set('kp_base:' + id, { v: 3, model: cloneModel(data.model) });
+    }
+    await collabJoin(code, { name: myName(), ts: Date.now() });
+    openPlan(id);
+    toast('已加入協作行程，可一起編輯與聊天 🤝');
+  } catch (e) { toast('加入失敗：' + e.message); }
+}
+
+// ---- 旅伴 tab: AI 規劃 / 同行聊天 modes ----
+function setAiMode(mode) {
+  aiMode = mode;
+  $$('#aiModeSeg .chip').forEach(c => c.classList.toggle('is-on', c.dataset.aimode === mode));
+  const plan = $('#aiPlanWrap'), chat = $('#collabWrap');
+  if (plan) plan.hidden = mode !== 'ai';
+  if (chat) chat.hidden = mode !== 'chat';
+  if (mode === 'chat') renderCollabChat();
+}
+function renderCollabHeader() {
+  const e = $('#collabMembers'); if (!e) return;
+  const n = Object.keys(collabMembers || {}).length;
+  e.textContent = currentCollab ? (n ? `${n} 人共同編輯` : '共同編輯中') : '';
+}
+function renderCollabChat() {
+  const root = $('#collabScroll'); if (!root) return; clear(root);
+  if (!currentCollab) {
+    root.appendChild(el('.empty', { style: { paddingTop: '28px' } }, [
+      el('.empty__emoji', { text: '🤝' }),
+      el('div', { text: '尚未開啟共同編輯' }),
+      el('.tiny.muted-3', { style: { marginTop: '8px', lineHeight: '1.7', maxWidth: '280px', margin: '8px auto 0' }, text: '到「邀請朋友」開啟「共同編輯」，朋友加入後就能在這裡一起聊天、即時看到彼此調整行程；輸入「@ai …」還能請 AI 直接幫忙規劃。' }),
+      fb.user ? null : el('.tiny.muted-3', { style: { marginTop: '6px' }, text: '（需先用 Google 登入）' }),
+    ]));
+    return;
+  }
+  const myUid = fb.user ? fb.user.uid : '';
+  if (!collabMsgs.length) root.appendChild(el('.tiny.muted-3', { style: { textAlign: 'center', padding: '20px' }, text: '開始和同行者聊天吧！輸入「@ai …」可請 AI 幫忙規劃。' }));
+  collabMsgs.forEach(msg => {
+    if (msg.sender === 'ai') { root.appendChild(el('.msg.msg--ai', { text: '🤖 ' + (msg.text || '') })); return; }
+    const mine = msg.uid === myUid;
+    root.appendChild(el('.collab-msg' + (mine ? '.is-me' : ''), {}, [
+      mine ? null : el('.collab-msg__who', { text: msg.name || '同行者' }),
+      el('.msg' + (mine ? '.msg--user' : '.msg--ai'), { text: msg.text || '' }),
+    ]));
+  });
+  root.scrollTop = root.scrollHeight;
+}
+async function sendCollabMsg() {
+  const inp = $('#collabInput'); if (!inp) return;
+  const text = inp.value.trim(); if (!text) return;
+  if (!currentCollab) { toast('請先在「邀請朋友」開啟共同編輯，或加入協作行程'); return; }
+  inp.value = ''; inp.style.height = 'auto';
+  const aiMatch = /^[@＠]ai\b/i.test(text);
+  collabSendMsg(currentCollab, { uid: fb.user ? fb.user.uid : '', name: myName(), text });
+  if (aiMatch) {
+    const ask = text.replace(/^[@＠]ai\b[:：]?\s*/i, '').trim();
+    setAiMode('ai');
+    if (ask && geminiCtl && geminiCtl.ask) geminiCtl.ask(ask, { agent: true });
+    else toast('已切到 AI 規劃');
+  }
 }
 
 // ---- Export: high-quality PDF + calendar (.ics) + JSON backup -----------------
@@ -1603,6 +1766,14 @@ function init() {
   }
   const hChips = $('#homeAiChips');
   if (hChips) ['5 天東京自由行', '6 天巴黎', '4 天首爾美食', '日本九州 8 天'].forEach(c => hChips.appendChild(el('button', { onclick: () => homeAiCreate(c) }, c)));
+  // 旅伴 mode toggle (AI 規劃 / 同行聊天) + collab chat composer
+  $$('#aiModeSeg .chip').forEach(c => c.addEventListener('click', () => setAiMode(c.dataset.aimode)));
+  const ci = $('#collabInput');
+  if (ci) {
+    $('#collabSendBtn').addEventListener('click', sendCollabMsg);
+    ci.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendCollabMsg(); } });
+    ci.addEventListener('input', () => { ci.style.height = 'auto'; ci.style.height = Math.min(120, ci.scrollHeight) + 'px'; });
+  }
   // sheets
   $('#scrim').addEventListener('click', closeSheets);
   $('#sheetClose').addEventListener('click', closeSheets);
@@ -1630,7 +1801,7 @@ function init() {
     status, goTab, openDay, showOnMap, goWeather, goSouvenirs,
     openMaps: url => window.open(url, '_blank', 'noopener'),
     planAdd, planRemove, planUpdate, planMove, planReset, newPlan: aiNewPlan, applyModel,
-    notifyAI: (t, b) => Notify.notifyAI(t, b),
+    notifyAI: (t, b) => { Notify.notifyAI(t, b); if (currentCollab) collabSendMsg(currentCollab, { sender: 'ai', name: 'AI', text: b || t }); },
   });
 
   // toolkit (錦囊) + motion

@@ -228,14 +228,20 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
       <div id="giftRoot" class="stagger"></div>
     </section>
 
-    <!-- ===== 6. AI ===== -->
+    <!-- ===== 6. 旅伴 (AI 規劃 + 同行聊天) ===== -->
     <section class="page" id="page-ai" data-page="ai" hidden>
-      <div class="chat-wrap">
+      <div class="chiprow" id="aiModeSeg" style="margin:4px 2px 10px">
+        <button class="chip chip--tap is-on" data-aimode="ai">AI 規劃</button>
+        <button class="chip chip--tap" data-aimode="chat">同行聊天</button>
+      </div>
+
+      <!-- AI 規劃 -->
+      <div class="chat-wrap" id="aiPlanWrap">
         <div class="row-between" style="padding:4px 2px 8px">
           <div class="row">
             <div class="appbar__logo" style="width:30px;height:30px;border-radius:9px"><svg viewBox="0 0 24 24" fill="#fff"><use href="#i-ai"/></svg></div>
             <div class="stack">
-              <b style="font-size:15px">Gemini 旅伴</b>
+              <b style="font-size:15px">AI 旅伴</b>
               <span class="tiny muted-3" id="aiModelLabel">Flash 3.0</span>
             </div>
           </div>
@@ -251,6 +257,21 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
           <div class="composer__field">
             <textarea id="chatInput" rows="1" placeholder="問我任何事 — 例如「明天怎麼去廣島？」"></textarea>
             <button class="send-btn" id="sendBtn" title="送出"><svg><use href="#i-send"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 同行聊天 (collaborative) -->
+      <div class="chat-wrap" id="collabWrap" hidden>
+        <div class="row-between" style="padding:4px 2px 8px">
+          <div class="row"><b style="font-size:15px">同行聊天</b></div>
+          <span class="tiny muted-3" id="collabMembers"></span>
+        </div>
+        <div class="chat-scroll" id="collabScroll"></div>
+        <div class="composer">
+          <div class="composer__field">
+            <textarea id="collabInput" rows="1" placeholder="和同行者聊天… 輸入「@ai …」可請 AI 幫忙規劃"></textarea>
+            <button class="send-btn" id="collabSendBtn" title="送出"><svg><use href="#i-send"/></svg></button>
           </div>
         </div>
       </div>

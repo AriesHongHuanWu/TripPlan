@@ -794,6 +794,11 @@ main {
 .btn--danger { background: var(--sakura); color: #fff; border-color: transparent; }
 .btn--danger:hover { filter: brightness(1.05); }
 
+/* ---- Collaborative group chat (同行聊天) ---- */
+.collab-msg { display: flex; flex-direction: column; align-items: flex-start; margin: 8px 0; }
+.collab-msg.is-me { align-items: flex-end; }
+.collab-msg__who { font-size: 11px; color: var(--text-3); margin: 0 6px 3px; font-weight: 600; }
+
 /* ---- Desktop / landscape (≥1000px): left nav rail + wide content ---- */
 @media (min-width: 1000px) {
   :root { --maxw: 1180px; }

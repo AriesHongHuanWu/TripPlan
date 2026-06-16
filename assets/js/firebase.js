@@ -60,6 +60,42 @@ export async function shareGet(code) {
   return snap.exists() ? snap.data().plan : null;
 }
 
+// ---- Firestore: real-time COLLABORATIVE plans (collab/{code}) ----
+// Doc: { model, meta, owner, members:{uid:{name,ts}}, writer, ts }; subcol messages/.
+export function collabReady() { return !!(db && _user); }
+export async function collabSave(code, data) {
+  if (!db) throw new Error('需登入雲端才能共同編輯');
+  await F.setDoc(F.doc(db, 'collab', code), { ...data, ts: Date.now() }, { merge: true });
+}
+export async function collabGet(code) {
+  if (!db) return null;
+  const snap = await F.getDoc(F.doc(db, 'collab', code));
+  return snap.exists() ? snap.data() : null;
+}
+export async function collabJoin(code, member) {
+  if (!db || !_user) return;
+  await F.setDoc(F.doc(db, 'collab', code), { members: { [_user.uid]: member } }, { merge: true });
+}
+export async function collabSetPlan(code, model, writer) {
+  if (!db) return;
+  try { await F.setDoc(F.doc(db, 'collab', code), { model, writer, ts: Date.now() }, { merge: true }); } catch (e) { console.warn('collabSetPlan', e); }
+}
+export function collabOnDoc(code, cb) {
+  if (!db) return () => {};
+  try { return F.onSnapshot(F.doc(db, 'collab', code), s => { if (s.exists()) cb(s.data()); }, () => {}); } catch { return () => {}; }
+}
+export async function collabSendMsg(code, msg) {
+  if (!db) return;
+  try { await F.addDoc(F.collection(db, 'collab', code, 'messages'), { ...msg, ts: Date.now() }); } catch (e) { console.warn('collabSendMsg', e); }
+}
+export function collabOnMsgs(code, cb) {
+  if (!db) return () => {};
+  try {
+    const q = F.query(F.collection(db, 'collab', code, 'messages'), F.orderBy('ts', 'asc'));
+    return F.onSnapshot(q, snap => cb(snap.docs.map(d => d.data())), () => {});
+  } catch { return () => {}; }
+}
+
 // ---- Cloud Messaging (web push) ----
 export async function getPushToken(vapidKey) {
   if (!app) return null;
