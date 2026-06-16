@@ -139,8 +139,9 @@ async function turn(scroll) {
     const calls = parts.filter(p => p.functionCall).map(p => p.functionCall);
 
     if (calls.length) {
-      // record model turn
-      history.push({ role: 'model', parts: calls.map(c => ({ functionCall: c })) });
+      // record the model turn EXACTLY as returned — preserves `thoughtSignature` on
+      // functionCall parts, which Gemini 3 requires to be echoed back (else 400).
+      history.push({ role: 'model', parts: cand.content.parts });
       const responses = [];
       for (const c of calls) {
         const { label, result } = await execTool(c);
@@ -156,7 +157,7 @@ async function turn(scroll) {
     typing.remove();
     const text = parts.filter(p => p.text).map(p => p.text).join('').trim()
       || (cand && cand.finishReason === 'SAFETY' ? '（這個問題我無法回答）' : '（沒有取得回覆，請再試一次）');
-    history.push({ role: 'model', parts: [{ text }] });
+    history.push({ role: 'model', parts: (cand && cand.content && cand.content.parts) || [{ text }] });
     addAI(scroll, text);
     return;
   }
