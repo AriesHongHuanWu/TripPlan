@@ -6,44 +6,42 @@
 /* ---------- Design tokens ------------------------------------------------- */
 :root {
   /* Brand gradients (Gemini-like indigo -> cyan, sakura accent) */
-  --brand-1: #4f46e5;     /* indigo */
-  --brand-2: #2563eb;     /* blue */
-  --brand-3: #06b6d4;     /* cyan */
-  --sakura: #ff5d8f;      /* coral / sakura */
-  --sakura-2: #ff8fab;
-  --gold: #f5b301;
+  --brand-1: #6366f1;     /* indigo light */
+  --brand-2: #4f46e5;     /* primary accent (single, refined indigo) */
+  --brand-3: #4338ca;     /* indigo deep */
+  --sakura: #e0496b;      /* muted rose — reserved for "live/now" only */
+  --sakura-2: #ec7891;
+  --gold: #c7951b;        /* muted ochre */
 
-  --grad-brand: linear-gradient(135deg, #6366f1 0%, #2563eb 45%, #06b6d4 100%);
-  --grad-sakura: linear-gradient(135deg, #ff6b6b 0%, #ff5d8f 50%, #c026d3 100%);
-  --grad-gold: linear-gradient(135deg, #f59e0b 0%, #f5b301 100%);
-  --grad-aurora: radial-gradient(1100px 560px at 12% -12%, rgba(99,102,241,.10), transparent 62%),
-                 radial-gradient(900px 480px at 112% 6%, rgba(6,182,212,.08), transparent 58%),
-                 radial-gradient(760px 460px at 50% 118%, rgba(255,93,143,.06), transparent 62%);
+  --grad-brand: linear-gradient(145deg, #5b54e8, #4338ca);   /* single-hue, premium */
+  --grad-sakura: linear-gradient(145deg, #e0496b, #c83a5c);  /* single-hue */
+  --grad-gold: linear-gradient(145deg, #d4a017, #b8860b);
+  --grad-aurora: radial-gradient(820px 420px at 50% -16%, rgba(79,70,229,.045), transparent 62%);
 
-  /* Light theme surfaces */
-  --bg: #f4f6fb;
+  /* Light theme surfaces — clean, neutral */
+  --bg: #f6f7f9;
   --bg-elev: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f7f8fc;
-  --surface-3: #eef1f7;
-  --line: #e6e9f2;
-  --line-strong: #d4d9e8;
+  --surface-2: #f3f4f6;
+  --surface-3: #e9ebef;
+  --line: #ebedf1;
+  --line-strong: #dcdfe6;
 
-  --text: #11151f;
-  --text-2: #475067;
-  --text-3: #7b8499;
+  --text: #15171c;
+  --text-2: #565d6b;
+  --text-3: #8a909c;
   --text-on-brand: #ffffff;
 
-  --shadow-1: 0 1px 2px rgba(16,21,31,.06), 0 1px 3px rgba(16,21,31,.08);
-  --shadow-2: 0 4px 12px rgba(16,21,31,.08), 0 2px 4px rgba(16,21,31,.05);
-  --shadow-3: 0 12px 32px rgba(16,21,31,.14), 0 4px 10px rgba(16,21,31,.08);
-  --shadow-pop: 0 20px 50px rgba(31,41,86,.22);
+  --shadow-1: 0 1px 2px rgba(18,20,28,.05);
+  --shadow-2: 0 4px 14px rgba(18,20,28,.07);
+  --shadow-3: 0 10px 30px rgba(18,20,28,.10);
+  --shadow-pop: 0 18px 44px rgba(18,20,28,.18);
 
   --r-xs: 8px;
-  --r-sm: 12px;
-  --r-md: 16px;
-  --r-lg: 22px;
-  --r-xl: 28px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 24px;
   --r-pill: 999px;
 
   --tab-h: 64px;
@@ -60,25 +58,23 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0a0c12;
-  --bg-elev: #11141d;
-  --surface: #151926;
-  --surface-2: #1b2030;
-  --surface-3: #232a3d;
-  --line: #262d40;
-  --line-strong: #36405b;
+  --bg: #0b0d12;
+  --bg-elev: #13151c;
+  --surface: #161922;
+  --surface-2: #1c2029;
+  --surface-3: #262b36;
+  --line: #242833;
+  --line-strong: #353b48;
 
-  --text: #eef1f8;
-  --text-2: #aeb6cc;
-  --text-3: #79839c;
+  --text: #ecedf2;
+  --text-2: #a6acba;
+  --text-3: #767c8a;
 
   --shadow-1: 0 1px 2px rgba(0,0,0,.4);
-  --shadow-2: 0 6px 18px rgba(0,0,0,.45);
-  --shadow-3: 0 16px 40px rgba(0,0,0,.55);
-  --shadow-pop: 0 24px 60px rgba(0,0,0,.6);
-  --grad-aurora: radial-gradient(1200px 600px at 10% -10%, rgba(99,102,241,.30), transparent 60%),
-                 radial-gradient(900px 500px at 110% 10%, rgba(6,182,212,.22), transparent 55%),
-                 radial-gradient(800px 500px at 50% 120%, rgba(255,93,143,.16), transparent 60%);
+  --shadow-2: 0 6px 18px rgba(0,0,0,.4);
+  --shadow-3: 0 16px 38px rgba(0,0,0,.5);
+  --shadow-pop: 0 22px 56px rgba(0,0,0,.6);
+  --grad-aurora: radial-gradient(820px 420px at 50% -16%, rgba(99,102,241,.09), transparent 62%);
 }
 
 /* ---------- Reset --------------------------------------------------------- */
@@ -235,9 +231,7 @@ main {
 }
 .hero::before {
   content:""; position:absolute; inset:0;
-  background: radial-gradient(600px 240px at 100% 0%, rgba(255,255,255,.28), transparent 60%),
-              radial-gradient(420px 240px at -10% 120%, rgba(255,93,143,.5), transparent 60%);
-  mix-blend-mode: screen;
+  background: radial-gradient(540px 240px at 96% -12%, rgba(255,255,255,.16), transparent 62%);
 }
 .hero > * { position: relative; }
 .hero__eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .9; }
@@ -276,8 +270,9 @@ main {
 .btn svg { width: 18px; height: 18px; }
 .btn:hover { box-shadow: var(--shadow-1); }
 .btn:active { transform: scale(.96); }
-.btn--brand { background: var(--grad-brand); color:#fff; border-color: transparent; box-shadow: var(--shadow-2); }
-.btn--sakura { background: var(--grad-sakura); color:#fff; border-color: transparent; box-shadow: var(--shadow-2); }
+.btn--brand { background: var(--brand-2); color:#fff; border-color: transparent; box-shadow: var(--shadow-1); }
+.btn--brand:hover { background: var(--brand-3); box-shadow: var(--shadow-2); }
+.btn--sakura { background: var(--sakura); color:#fff; border-color: transparent; box-shadow: var(--shadow-1); }
 .btn--ghost { background: transparent; }
 .btn--block { width: 100%; }
 .btn--sm { padding: 8px 13px; font-size: 13px; }
