@@ -40,10 +40,15 @@ function tripContext() {
 }
 function systemText() {
   const name = getLang() === 'en' ? 'English' : '繁體中文';
+  // i18n persona/tools/brevity + language directive, but keep the (model-facing)
+  // enhanced agent-mode instruction from origin/main verbatim.
+  const agentBlock = agentOn
+    ? '【代理模式開啟】你能操控 App 並直接修改這份行程：navigate、open_day、show_on_map、open_google_maps、show_souvenirs、find_hotels；add_activity／remove_activity／update_activity／move_activity 調整單一活動；add_day／remove_day 增減天數；reset_plan 還原。\n「從零規劃整趟」：使用者說「幫我規劃去○○、玩○天」時呼叫 plan_trip（在 request 中盡量帶齊：目的地、天數或起訖日期、出發地/機場、班機時間、偏好、預算、同行）。plan_trip 會自動產生「像專業旅遊書一樣完整」的行程（每城多個景點、每天 5–8 個含時間/停留/花費的活動、城市間交通、交通票、預算、打包、各城伴手禮、當地緊急電話）。完成後務必呼叫 open_day 1 讓使用者看到行程，並用 2–3 句說明重點與亮點。關鍵資訊不足時先用文字逐項問清楚（日期、機場、班機時間）再規劃。複雜調整可連續呼叫多個工具。'
+    : t('ai.sys.agentOff');
   return [
     t('ai.sys.persona', { name }),
     t('ai.sys.tools'),
-    agentOn ? t('ai.sys.agentOn') : t('ai.sys.agentOff'),
+    agentBlock,
     t('ai.sys.brevity'),
     t('ai.sys.langDirective'),
   ].join('\n') + '\n\n' + tripContext();
@@ -140,11 +145,14 @@ async function execTool(call) {
 // known-good fallbacks so a stale model id never breaks the whole AI.
 const MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
 const modelMissing = (status, t) => status === 404 || /not\s*found|not\s*supported|unknown name|is not found|call ListModels/i.test(t || '');
+// Rate-limit / quota exhaustion (free-tier RPD/TPM). Different models often have
+// separate quota pools, so on 429 we try the next model before giving up.
+const isRateLimit = (status, t) => status === 429 || /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(t || '');
 async function callGemini(payload) {
   const cfg = getCfg();
   if (cfg.key) {
     const models = [cfg.model, ...MODEL_FALLBACKS].filter((m, i, a) => m && a.indexOf(m) === i);
-    let lastErr = 'direct error';
+    let lastErr = 'direct error', rate = false;
     for (const m of models) {
       let res;
       try {
@@ -154,16 +162,18 @@ async function callGemini(payload) {
       if (res.ok) return res.json();
       const t = await res.text();
       lastErr = 'direct ' + res.status + ': ' + t.slice(0, 220);
-      if (!modelMissing(res.status, t)) break;   // a real key/permission/quota error — stop, don't mask it
+      if (isRateLimit(res.status, t)) { rate = true; continue; }   // quota hit — try another model's pool
+      if (!modelMissing(res.status, t)) break;                     // a real key/permission error — surface it
     }
-    throw new Error(lastErr);
+    throw new Error(rate ? 'RATE_LIMIT' : lastErr);
   }
   let res;
   try { res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
   catch (e) { throw new Error('無法連線到伺服器：' + (e && e.message || e)); }
   if (!res.ok) {
     const t = await res.text();
-    if (res.status === 503 || res.status === 404 || /GEMINI_API_KEY/i.test(t)) throw new Error('NO_KEY');
+    if (res.status === 503 || res.status === 404 || res.status === 405 || /GEMINI_API_KEY/i.test(t)) throw new Error('NO_KEY');
+    if (isRateLimit(res.status, t)) throw new Error('RATE_LIMIT');
     throw new Error('proxy ' + res.status + ': ' + t.slice(0, 220));
   }
   return res.json();
@@ -171,38 +181,120 @@ async function callGemini(payload) {
 
 // ---- Full-trip generation (any country) -> structured model JSON -------------
 // Returns either { needInfo:[{key,question,hint}] } or a full trip object.
-export async function generateTripPlan({ prompt, answers } = {}) {
-  const sys = `你是 Plan AI，一位世界級旅遊規劃師。根據使用者需求，為「任何國家」產生一份完整、準確、可直接使用的逐日行程，並只輸出「嚴格 JSON」（不要 markdown、不要說明文字）。
+// Gemini structured-output schema (OpenAPI subset) — forces a complete, well-shaped
+// model so generated trips are as rich as the curated template. Top-level has NO
+// required keys so a needInfo-only reply also validates. Souvenirs is an ARRAY of
+// {cityKey,items} because JSON Schema can't express arbitrary-key maps (normalizeModel
+// converts it to the keyed map the app uses).
+const _leg = { type: 'OBJECT', properties: { dep: { type: 'STRING' }, arr: { type: 'STRING' }, line: { type: 'STRING' }, type: { type: 'STRING' }, dur: { type: 'STRING' }, note: { type: 'STRING' } } };
+const TRIP_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    trip: { type: 'OBJECT', properties: {
+      title: { type: 'STRING' }, subtitle: { type: 'STRING' }, start: { type: 'STRING' }, end: { type: 'STRING' },
+      days: { type: 'INTEGER' }, base: { type: 'STRING' }, country: { type: 'STRING' }, emoji: { type: 'STRING' }, note: { type: 'STRING' },
+      currency: { type: 'OBJECT', properties: { symbol: { type: 'STRING' }, rate: { type: 'NUMBER' }, note: { type: 'STRING' } } },
+    } },
+    cities: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      key: { type: 'STRING' }, name: { type: 'STRING' }, en: { type: 'STRING' }, lat: { type: 'NUMBER' }, lng: { type: 'NUMBER' },
+      emoji: { type: 'STRING' }, color: { type: 'STRING' }, station: { type: 'STRING' }, blurb: { type: 'STRING' },
+      pois: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+        name: { type: 'STRING' }, en: { type: 'STRING' }, lat: { type: 'NUMBER' }, lng: { type: 'NUMBER' },
+        emoji: { type: 'STRING' }, tag: { type: 'STRING' }, desc: { type: 'STRING' }, hours: { type: 'STRING' }, fee: { type: 'STRING' },
+      }, required: ['name', 'lat', 'lng'] } },
+    }, required: ['key', 'name', 'lat', 'lng'] } },
+    routes: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      from: { type: 'STRING' }, to: { type: 'STRING' }, fromStn: { type: 'STRING' }, toStn: { type: 'STRING' },
+      line: { type: 'STRING' }, summary: { type: 'STRING' }, fare: { type: 'STRING' }, pass: { type: 'STRING' }, tip: { type: 'STRING' },
+      legs: { type: 'ARRAY', items: _leg },
+    }, required: ['from', 'to'] } },
+    days: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      date: { type: 'STRING' }, cityKey: { type: 'STRING' }, weatherKey: { type: 'STRING' }, title: { type: 'STRING' }, summary: { type: 'STRING' },
+      items: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+        time: { type: 'STRING' }, type: { type: 'STRING' }, title: { type: 'STRING' }, jp: { type: 'STRING' },
+        desc: { type: 'STRING' }, cost: { type: 'STRING' }, dur: { type: 'STRING' }, lat: { type: 'NUMBER' }, lng: { type: 'NUMBER' },
+        route: { type: 'OBJECT', properties: { fromStn: { type: 'STRING' }, toStn: { type: 'STRING' }, fare: { type: 'STRING' }, pass: { type: 'STRING' }, legs: { type: 'ARRAY', items: _leg } } },
+      }, required: ['time', 'type', 'title'] } },
+    }, required: ['date', 'cityKey', 'title', 'items'] } },
+    pass: { type: 'OBJECT', properties: {
+      best: { type: 'STRING' }, price: { type: 'STRING' }, days: { type: 'STRING' }, why: { type: 'STRING' }, buy: { type: 'STRING' }, highlights: { type: 'ARRAY', items: { type: 'STRING' } },
+    } },
+    souvenirs: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      cityKey: { type: 'STRING' },
+      items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: { type: 'STRING' }, emoji: { type: 'STRING' }, desc: { type: 'STRING' }, where: { type: 'STRING' }, price: { type: 'STRING' } }, required: ['name'] } },
+    }, required: ['cityKey', 'items'] } },
+    budget: { type: 'OBJECT', properties: {
+      fixed: { type: 'ARRAY', items: { type: 'OBJECT', properties: { label: { type: 'STRING' }, amount: { type: 'NUMBER' } }, required: ['label', 'amount'] } },
+      mealsPerDay: { type: 'NUMBER' }, hotelPerNight: { type: 'NUMBER' }, nights: { type: 'INTEGER' },
+    } },
+    packing: { type: 'ARRAY', items: { type: 'STRING' } },
+    emergency: { type: 'OBJECT', properties: {
+      numbers: { type: 'ARRAY', items: { type: 'OBJECT', properties: { label: { type: 'STRING' }, num: { type: 'STRING' }, emoji: { type: 'STRING' } }, required: ['num'] } },
+      steps: { type: 'ARRAY', items: { type: 'STRING' } },
+      offices: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: { type: 'STRING' }, area: { type: 'STRING' }, tel: { type: 'STRING' }, addr: { type: 'STRING' } } } },
+    } },
+    needInfo: { type: 'ARRAY', items: { type: 'OBJECT', properties: { key: { type: 'STRING' }, question: { type: 'STRING' }, hint: { type: 'STRING' } }, required: ['key', 'question'] } },
+  },
+};
+// Parse a day count out of free text / answers ("7 天", "天數：10").
+function parseDays(s) { const m = String(s || '').match(/天數[：:]\s*(\d{1,4})/) || String(s || '').match(/(\d{1,4})\s*天/); return m ? Math.min(366, parseInt(m[1], 10)) : 0; }
+const CHUNK_DAYS = 14;   // days produced per Gemini call (keeps each call within token budget)
+
+// One Gemini call. With `known` set it produces ONLY the next day-range (continuation);
+// otherwise it produces the full framework + the first day-range.
+async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {}) {
+  const sys = `你是 Plan AI，一位世界級旅遊規劃師。根據使用者需求，為「任何國家」產生一份**像專業旅遊書一樣完整、準確、可直接出發使用**的逐日行程，並只輸出「嚴格 JSON」（不要 markdown、不要任何說明文字）。
 
 先判斷必要資訊是否足夠。必要 = 目的地、以及（天數 或 起訖日期）。次要（可合理假設）= 出發地/機場、班機時間、旅遊節奏、偏好。
 若有「真正必要」且無法合理假設的資訊缺漏，只回傳：
 {"needInfo":[{"key":"dates","question":"請問你的旅遊日期或天數？","hint":"例如 7/10–7/15 或 5 天"}]}（最多 4 題，先問最關鍵的，問題一律使用${getLang() === 'en' ? '英文 English' : '繁體中文'}）。
 
-否則回傳完整行程 JSON（所有人類可讀文字一律使用${getLang() === 'en' ? '英文 English' : '繁體中文'}）：
+否則回傳「完整」行程 JSON（所有人類可讀文字一律使用${getLang() === 'en' ? '英文 English' : '繁體中文'}）：
 {
  "trip":{"title":"短標題","subtitle":"一句副標","start":"YYYY-MM-DD","end":"YYYY-MM-DD","days":N,"base":"進出點或概述","country":"國家","emoji":"🗼","currency":{"symbol":"€","rate":34.5,"note":"1 EUR ≈ 34.5 TWD（參考）"}},
  "cities":[{"key":"英數slug","name":"中文名","en":"English","lat":48.8566,"lng":2.3522,"emoji":"🗼","blurb":"一句話特色","pois":[{"name":"中文名","en":"English","lat":48.86,"lng":2.34,"emoji":"📍","tag":"see|eat|shop","desc":"簡短說明","hours":"09:00–18:00","fee":"€20"}]}],
  "routes":[{"from":"城市A","to":"城市B","summary":"交通方式與時間","fare":"票價"}],
- "days":[{"date":"YYYY-MM-DD","cityKey":"對應的城市key","title":"當日主題","summary":"一句話","items":[{"time":"HH:MM","type":"arrive|see|eat|shop|move|stay|depart","title":"活動","desc":"簡短","cost":"€20","lat":48.86,"lng":2.34}]}],
+ "days":[{"date":"YYYY-MM-DD","cityKey":"對應的城市key","weatherKey":"顯示哪一城天氣(通常=cityKey)","title":"當日主題","summary":"一句話","items":[{"time":"HH:MM","type":"arrive|see|eat|shop|move|stay|depart","title":"活動","desc":"簡短","cost":"€20","dur":"90 分","lat":48.86,"lng":2.34,"route":{"fromStn":"A站","toStn":"B站","fare":"€5","legs":[{"dep":"09:00","arr":"09:40","line":"地鐵1號線","type":"local","dur":"40 分"}]}}]}],
  "pass":{"best":"交通票名稱或留空","price":"","days":"","why":"","highlights":[]},
  "budget":{"fixed":[{"label":"機票/長途交通","amount":15000}],"mealsPerDay":1500,"hotelPerNight":4000,"nights":N-1},
  "packing":["護照","..."],
- "emergency":{"numbers":[{"label":"緊急電話","num":"112","emoji":"🚓"}],"offices":[]}
+ "souvenirs":[{"cityKey":"對應城市key","items":[{"name":"伴手禮名","emoji":"🍫","desc":"特色說明","where":"哪裡買","price":"約 €10"}]}],
+ "emergency":{"numbers":[{"label":"報警","num":"112","emoji":"🚓"},{"label":"救護/消防","num":"112","emoji":"🚑"}],"offices":[]}
 }
+
+完整度要求（務必全部填寫，不可省略任何區塊）：
+- cities：每個城市至少 4 個 pois（著名景點／餐廳／購物），每個 poi 要有真實 lat/lng、desc、hours、fee。
+- days：每天 5–8 個 items 並「依時間排序」；包含 see/eat，必要時加 move（城市間或長距離移動），首日含 arrive、末日含 depart、每天最後通常是 stay（住宿）。每個 see/eat 要同時有 desc、dur（停留時間）與 cost；type=move 的 item 請填 route{fromStn,toStn,fare,legs[]}（每段 dep/arr/line/type/dur）。
+- routes：列出所有城市之間的移動，每段含 from/to 與 fare，並盡量附 legs[]（dep/arr/line/type/dur）。
+- pass：當地若有適合的交通票券就建議，否則 best 留空。
+- budget：fixed（機票／長途交通等）、mealsPerDay、hotelPerNight、nights 全部填數字。
+- packing：依目的地與季節給 8–14 項（依該國客製，勿照抄）。
+- souvenirs：陣列，每元素 {cityKey, items[]}，為「每個主要城市」各給 3–5 樣當地特產（含 where 與 price）；cityKey 必須對應 cities 的 key。
+- emergency：填「該目的地國家」正確的緊急電話（至少報警與救護/消防，勿用預設 110/119）。
 
 規則：
 - lat/lng 必須是真實且正確的座標（著名地點用其實際經緯度）。
 - 每個 day 的 cityKey 必須對應 cities 之一的 key。
-- 有日期就用使用者的日期；只有天數就從最近的合理日期起算。
-- 每天安排 4–7 個活動，時間與當地交通要真實合理；desc 盡量精簡（≤20 字）。
+- 有日期就用使用者的日期；只有天數就從最近的合理日期起算；days 與 start/end 要一致。
+- 時間與當地交通要真實合理；desc 精簡（≤22 字）。
 - 金額用「當地貨幣」並含其符號；currency.symbol 用該國符號。
-- 只輸出 JSON 物件本身。`;
+- 只輸出 JSON 物件本身（一個完整且合法的 JSON）。`;
+  // Long-trip chunking: instruct which day-range to produce this call.
+  let chunkNote = '';
+  if (known) {
+    const cityList = (known.cities || []).map(c => `${c.key}=${c.name}`).join('、');
+    const lastDate = (known.days && known.days.length) ? known.days[known.days.length - 1].date : (known.trip && known.trip.start) || '';
+    chunkNote = `\n\n【延續產生】整趟共 ${total} 天，前面天數已排好。本次只產生「第 ${dayFrom}–${dayTo} 天」的 days，延續前面的城市、路線與節奏。可沿用既有城市 key：${cityList || '（無）'}。若這幾天去到新城市，請在 cities 補上新城市（key 不可與既有重複）並在 routes 補上往返路段、在 souvenirs 補上特產。days 第一天日期請接在「${lastDate}」之後，逐日遞增。trip/pass/budget/packing/emergency 可省略；本次重點是 days（與必要的新 cities/routes/souvenirs）。`;
+  } else if (total > CHUNK_DAYS) {
+    chunkNote = `\n\n【長行程・分批產生】本趟共 ${total} 天。cities/routes/pass/budget/packing/souvenirs/emergency 等「框架」請針對整趟 ${total} 天完整規劃；但 days 本次只先產生「第 ${dayFrom}–${dayTo} 天」（其餘天稍後分批補上）。`;
+  }
   const userMsg = `使用者需求：「${(prompt || '').trim() || '(未提供文字，請依常見熱門選擇合理規劃並在 needInfo 詢問關鍵資訊)'}」`
+    + (total ? `\n總天數：${total} 天。` : '')
     + (answers && Object.keys(answers).length ? `\n使用者補充資訊：\n${Object.entries(answers).filter(([k]) => k !== '_skip').map(([k, v]) => `- ${k}：${v}`).join('\n')}${answers._skip ? '\n（使用者選擇略過提問，請用合理假設直接完成，不要再回傳 needInfo）' : ''}` : '');
   const data = await callGemini({
-    system_instruction: { parts: [{ text: sys }] },
+    system_instruction: { parts: [{ text: sys + chunkNote }] },
     contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 16384, responseMimeType: 'application/json' },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 32768, responseMimeType: 'application/json', responseSchema: TRIP_SCHEMA },
   });
   const cand = data.candidates && data.candidates[0];
   const text = ((cand && cand.content && cand.content.parts) || []).filter(p => p.text).map(p => p.text).join('').trim();
@@ -211,6 +303,47 @@ export async function generateTripPlan({ prompt, answers } = {}) {
   catch { const m = text.match(/\{[\s\S]*\}/); if (m) { try { obj = JSON.parse(m[0]); } catch {} } }
   if (!obj) throw new Error(t('ai.gen.err.parse'));
   return obj;
+}
+
+// Full-trip generation. Short trips = 1 call; long trips are built in day-chunks so
+// the content stays COMPLETE even for very long itineraries (up to a year), each call
+// within the model's token budget. Returns { needInfo } or a full trip model. A chunk
+// failing mid-way (e.g. quota) keeps everything built so far — a usable, complete plan.
+export async function generateTripPlan({ prompt, answers, days, onProgress } = {}) {
+  const total = Math.max(0, days || parseDays(prompt) || (answers ? parseDays(Object.values(answers).join(' ')) : 0) || 0);
+  const first = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: total ? Math.min(total, CHUNK_DAYS) : 0 });
+  if (first && first.needInfo && first.needInfo.length) return first;
+  if (!first || !Array.isArray(first.days)) return first;
+  const model = first;
+  onProgress && onProgress(model.days.length, total || model.days.length);
+  if (total > CHUNK_DAYS) {
+    const haveD = new Set((model.days || []).map(d => d.date));
+    for (let guard = 0; model.days.length < total && guard < 40; guard++) {
+      const from = model.days.length + 1, to = Math.min(total, from + CHUNK_DAYS - 1);
+      let chunk;
+      try { chunk = await genTripCall({ prompt, answers, total, dayFrom: from, dayTo: to, known: model }); }
+      catch { break; }   // quota/error → stop with a complete partial plan
+      if (!chunk || !Array.isArray(chunk.days) || !chunk.days.length) break;
+      // Only append days that ADVANCE past what we have (and aren't duplicates) — a
+      // stateless continuation can re-emit the boundary date; duplicates would corrupt
+      // dayByDate / day numbering downstream.
+      const lastDate = model.days.length ? model.days[model.days.length - 1].date : '';
+      let added = 0;
+      chunk.days.forEach(d => { if (d && d.date && !haveD.has(d.date) && (!lastDate || d.date > lastDate)) { model.days.push(d); haveD.add(d.date); added++; } });
+      if (!added) break;   // chunk didn't advance → stop with a clean partial plan
+      if (!Array.isArray(model.cities)) model.cities = [];
+      const ck = new Set(model.cities.map(c => c.key));
+      (chunk.cities || []).forEach(c => { if (c && c.key && !ck.has(c.key)) { model.cities.push(c); ck.add(c.key); } });
+      if (Array.isArray(chunk.routes) && chunk.routes.length) model.routes = (model.routes || []).concat(chunk.routes);
+      if (Array.isArray(chunk.souvenirs) && chunk.souvenirs.length) model.souvenirs = (model.souvenirs || []).concat(chunk.souvenirs);
+      onProgress && onProgress(model.days.length, total);
+    }
+    if (model.trip) {
+      model.trip.days = model.days.length;   // reflect what was actually built
+      if (model.days.length && model.days.length < total) model.trip.end = model.days[model.days.length - 1].date;   // partial: end at last built day
+    }
+  }
+  return model;
 }
 
 // ---- chat turn (with function-calling loop) ----
@@ -231,7 +364,9 @@ async function turn(scroll) {
       });
     } catch (e) {
       typing.remove();
-      const msg = e.message === 'NO_KEY' ? t('ai.err.noKey') : t('ai.err.connect') + e.message;
+      const msg = e.message === 'NO_KEY' ? t('ai.err.noKey')
+        : e.message === 'RATE_LIMIT' ? '⚠️ AI 用量已達上限（配額／速率限制）。請稍等一兩分鐘再試；若經常發生，可到 Google AI Studio 確認方案與配額，或在「設定」改用自己的 API 金鑰。'
+        : t('ai.err.connect') + e.message;
       addAI(scroll, msg);
       return;
     }
