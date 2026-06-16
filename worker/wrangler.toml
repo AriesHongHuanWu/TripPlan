@@ -1,0 +1,13 @@
+# Cloudflare Worker (Cron) — sends itinerary reminders via FCM.
+# Deploy from this folder:  cd worker && npx wrangler deploy
+# Set secrets (do NOT commit):
+#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT   # paste the NEW service-account JSON
+#   npx wrangler secret put PUSH_KEY                   # same random string you used for Pages
+# Manual test:  https://kyushu-reminders.<your-subdomain>.workers.dev/?key=PUSH_KEY
+
+name = "kyushu-reminders"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+[triggers]
+crons = ["*/15 * * * *"]

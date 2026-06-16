@@ -777,12 +777,12 @@ function renderNotifySettings(body) {
   body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 8px', lineHeight: '1.6' }, text: '行程進行中可收到「準備出發 / 下一個行程 / 車次」本地提醒（App 開著時）。共享聊天與 AI 完成的遠端推播需登入後生效。' }));
   body.appendChild(el('.row-between', { style: { padding: '6px 0' } }, [
     el('div', {}, [el('b', { text: '啟用通知' }), el('.tiny.muted-3', { text: perm === 'denied' ? '已被瀏覽器封鎖，請到網站設定解除' : (on ? '已開啟' : '關閉') })]),
-    toggleSwitch(on, async v => { if (v) await Notify.requestEnable(); else Notify.disable(); openSettings(); }),
+    toggleSwitch(on, async v => { if (v) await Notify.requestEnable(); else Notify.disable(); scheduleCloudPush(); openSettings(); }),
   ]));
   Notify.TYPES.forEach(([k, emoji, label, desc]) => {
     body.appendChild(el('.row-between', { style: { padding: '8px 0', opacity: on ? '1' : '.45' } }, [
       el('div', { style: { minWidth: '0' } }, [el('div', { style: { fontWeight: '600', fontSize: '14px' }, text: `${emoji} ${label}` }), el('.tiny.muted-3', { text: desc })]),
-      toggleSwitch(!!c.types[k], v => Notify.setType(k, v)),
+      toggleSwitch(!!c.types[k], v => { Notify.setType(k, v); scheduleCloudPush(); }),
     ]));
   });
   body.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: () => { if (!on) { toast('請先啟用通知'); return; } Notify.notify('reminder', '🔔 測試通知', '通知運作正常！'); } }, ['發送測試通知']));
@@ -796,7 +796,7 @@ function maybeNotifyIntro() {
     b.appendChild(el('p', { style: { fontSize: '14.5px', lineHeight: '1.7' }, text: '這個 App 可在旅途中提醒你：準備出發、下一個行程、搭車時間，以及（登入後）共享聊天與 AI 完成行程的通知。' }));
     b.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '8px' }, text: '可隨時在「設定 → 通知」開關各項；不開也完全能用。' }));
     b.appendChild(el('.grid2', { style: { marginTop: '16px' } }, [
-      el('button.btn.btn--brand', { onclick: async () => { await Notify.requestEnable(); closeSheets(); } }, ['🔔 開啟通知']),
+      el('button.btn.btn--brand', { onclick: async () => { await Notify.requestEnable(); scheduleCloudPush(); closeSheets(); } }, ['🔔 開啟通知']),
       el('button.btn', { onclick: () => { Notify.markAsked(); closeSheets(); } }, ['稍後再說']),
     ]));
     openSheet('sheet');
@@ -1035,10 +1035,19 @@ function allCloudData() {
   for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('kp_') && k !== 'kp_gemini_key' && k !== 'kp_theme' && k !== 'kp_synccode') o[k] = localStorage.getItem(k); }
   return o;
 }
+// Flattened current-plan schedule the Cron Worker reads to send reminders
+function currentSchedule() {
+  const out = [];
+  DAYS.forEach(d => d.items.filter(it => it.type !== 'stay').forEach(it => out.push({ d: d.date, t: it.time, title: it.title, type: it.type })));
+  return out;
+}
+function cloudPayload() {
+  return { keysJson: JSON.stringify(allCloudData()), scheduleJson: JSON.stringify(currentSchedule()), notifyJson: JSON.stringify(Notify.cfg()) };
+}
 function scheduleCloudPush() {
   if (!fb.user) return;
   clearTimeout(cloudTimer);
-  cloudTimer = setTimeout(() => { snapshotCurrent(); pushUserData({ keys: allCloudData() }).catch(() => {}); }, 1500);
+  cloudTimer = setTimeout(() => { snapshotCurrent(); pushUserData(cloudPayload()).catch(() => {}); }, 1500);
 }
 async function onAuthChange(user) {
   const homeNote = $('#homeNote');
@@ -1047,13 +1056,14 @@ async function onAuthChange(user) {
   // signed in → pull cloud; cloud wins if it has data, else push local up
   try {
     const cloud = await pullUserData();
-    if (cloud && cloud.keys && cloud.keys.kp_plans) {
-      Object.entries(cloud.keys).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch {} });
+    let keys = null; if (cloud && cloud.keysJson) { try { keys = JSON.parse(cloud.keysJson); } catch {} }
+    if (keys && keys.kp_plans) {
+      Object.entries(keys).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch {} });
       ensurePlans();
       if (!$('#app').hidden) openPlan(currentPlanId); else renderPlans();
       toast('已從你的帳號載入行程');
     } else {
-      await pushUserData({ keys: allCloudData() });
+      await pushUserData(cloudPayload());
     }
   } catch (e) { console.warn('cloud sync', e); }
   try { Notify.registerPush(); } catch {}

@@ -123,7 +123,20 @@ GEMINI_MODEL=gemini-flash-latest
    - `PUSH_KEY` = 一組隨機字串（保護此端點）
 3. 由你的伺服器/排程呼叫 `POST /api/push`，body `{ tokens, title, body, appKey }`。
 > ⚠️ 服務帳戶私鑰是機密，**只放 Cloudflare Secret，切勿 commit / 放前端**。
-> 自動觸發（排程行程提醒、共享聊天通知）需再加排程：**Cloudflare Worker Cron** 或 **Firebase Cloud Functions（Firestore 觸發）** —— 可再請我加上。
+#### 自動排程提醒（Cloudflare Worker Cron）— 已附 `worker/`
+App 關著也能收到「準備出發 / 搭車提醒」：登入後 App 會把你目前行程的時刻表（`scheduleJson`）、通知設定（`notifyJson`）與裝置 token（`fcmTokens`）寫到 Firestore `users/{uid}`；`worker/` 是一個每 15 分鐘執行的 Worker，會讀取並在出發前推播。
+
+部署：
+```bash
+cd worker
+npx wrangler deploy
+npx wrangler secret put FIREBASE_SERVICE_ACCOUNT   # 貼新的服務帳戶 JSON（與 Pages 同一把）
+npx wrangler secret put PUSH_KEY                   # 與 Pages 同一組隨機字串
+```
+- Cron 已設 `*/15 * * * *`（每 15 分），出發前 ~15 分（交通 ~20 分）推播；用 `pushCursor` 去重、首次執行不會補發過去的提醒。
+- 手動測試：`https://kyushu-reminders.<你的子網域>.workers.dev/?key=<PUSH_KEY>`。
+- 需先在 Firebase 啟用 Firestore 並讓 App 登入過一次（才有 token 與時刻表）。
+> 之後若要「共享聊天即時通知」，那種事件驅動更適合 Firebase Cloud Functions（Firestore onWrite 觸發，需 Blaze 方案）—— 可再請我加。
 
 ## ⚠️ 重要說明
 - **車次與票價為參考值**（依官方/權威來源整理），出發前請以即時 **Google Maps / JR 官方**為準 — App 內每段交通都已內建即時連結。

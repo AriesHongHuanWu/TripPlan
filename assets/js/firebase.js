@@ -46,7 +46,7 @@ export async function pullUserData() {
 }
 export async function pushUserData(data) {
   if (!_user) return;
-  await F.setDoc(F.doc(db, 'users', _user.uid), { ...data, updatedAt: Date.now() });
+  await F.setDoc(F.doc(db, 'users', _user.uid), { ...data, updatedAt: Date.now() }, { merge: true });
 }
 
 // ---- Firestore: public share by code ----
