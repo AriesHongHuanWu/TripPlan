@@ -2,17 +2,20 @@
 // map.js — Leaflet region map (本州/四國/九州) + JR line schematic
 // ============================================================================
 import { CITIES, allPois } from './data.js';
-import { gmapPlace } from './util.js';
+import { gmapPlace, gmapHotels } from './util.js';
 
 let map, markerIndex = {}, inited = false;
 
-// Rail corridors (approx waypoints) for polylines
+// Rail corridors (approx waypoints) for polylines — 熊本 → 關西 single-trip
 const RAIL = [
-  { name: '山陽新幹線', color: '#2563eb', pts: [[34.3978, 132.4753], [34.0089, 130.9569], [33.8868, 130.8826], [33.5902, 130.4017]] },
-  { name: '九州新幹線', color: '#16a34a', pts: [[33.5902, 130.4017], [32.7894, 130.6880]] },
-  { name: '豐肥本線', color: '#ea580c', pts: [[32.7894, 130.6880], [32.9522, 131.1213]] },
-  { name: '宮島（山陽本線+渡輪）', color: '#0d9488', pts: [[34.3978, 132.4753], [34.3110, 132.3036], [34.2960, 132.3199]] },
-  { name: '下關（在來線）', color: '#e11d48', pts: [[33.8868, 130.8826], [33.9499, 130.9242]] },
+  { name: '九州新幹線（另購）', color: '#16a34a', dash: true, pts: [[32.7896, 130.6880], [33.5899, 130.4207]] },
+  { name: '山陽新幹線', color: '#2563eb', pts: [[33.5899, 130.4207], [33.8866, 130.8825], [34.3975, 132.4757], [34.6664, 133.9180], [34.7335, 135.5003]] },
+  { name: '下關（在來線）', color: '#e11d48', dash: true, pts: [[33.8866, 130.8825], [33.9498, 130.9242]] },
+  { name: '宮島（山陽本線+渡輪）', color: '#0d9488', pts: [[34.3975, 132.4757], [34.3110, 132.3036], [34.2960, 132.3199]] },
+  { name: '瀨戶大橋（四國）', color: '#d97706', pts: [[34.6664, 133.9180], [34.3506, 134.0466]] },
+  { name: '關西在來線', color: '#b91c1c', pts: [[34.7335, 135.5003], [34.7025, 135.4959], [34.9858, 135.7588]] },
+  { name: '奈良線', color: '#65a30d', dash: true, pts: [[34.7025, 135.4959], [34.6831, 135.8190]] },
+  { name: 'KIX（関空快速）', color: '#4f46e5', dash: true, pts: [[34.7025, 135.4959], [34.6463, 135.5142], [34.4339, 135.2440]] },
 ];
 
 export function initMap(onWeather) {
@@ -21,19 +24,16 @@ export function initMap(onWeather) {
   if (!elMap) return;
   inited = true;
 
-  map = L.map(elMap, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([33.7, 131.6], 7);
+  map = L.map(elMap, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([34.0, 133.1], 6);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, subdomains: 'abcd',
   }).addTo(map);
+  map.fitBounds([[32.55, 130.25], [35.15, 135.95]], { padding: [12, 12] });
 
   // Rail polylines
   RAIL.forEach(r => {
-    L.polyline(r.pts, { color: r.color, weight: 4, opacity: .75, dashArray: r.name.includes('在來') || r.name.includes('豐肥') ? '6 6' : null, lineCap: 'round' }).addTo(map);
+    L.polyline(r.pts, { color: r.color, weight: 4, opacity: .78, dashArray: r.dash ? '5 7' : null, lineCap: 'round' }).addTo(map);
   });
-
-  // Shikoku note marker
-  L.marker([33.84, 132.77], { icon: L.divIcon({ className: '', html: chipMarker('🏝️ 四國', '#0d9488'), iconSize: [80, 28], iconAnchor: [40, 14] }) })
-    .addTo(map).bindPopup('<b>四國</b><br>本行程地圖涵蓋四國；若想加跑四國，需另購 All Shikoku Pass 與本四連絡線（與 SSNK 周遊券不互通）。');
 
   // City + POI markers
   CITIES.forEach(c => {
@@ -104,49 +104,60 @@ function popupHtml(p, onWeather) {
         padding:7px;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">Google 導航</a>
       ${p.cityKey ? `<button data-wx="${p.cityKey}" style="background:#eef1f7;border:0;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer">天氣</button>` : ''}
     </div>
+    ${p.lat != null ? `<a href="${gmapHotels(p.lat, p.lng)}" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:6px;background:#fff;border:1px solid #e11d48;color:#e11d48;
+        padding:7px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none">🏨 找附近飯店</a>` : ''}
   </div>`;
 }
 
-// ---- JR line schematic (SVG) ----
+// ---- JR line schematic (SVG) — 熊本 → 關西 single-trip corridor ----
 export function jrSchematicHTML() {
   const S = (x, y, label, sub, color, r = 7) => `
-    <circle cx="${x}" cy="${y}" r="${r}" fill="#fff" stroke="${color}" stroke-width="3"/>
-    <text x="${x}" y="${y - 14}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">${label}</text>
-    ${sub ? `<text x="${x}" y="${y + 22}" text-anchor="middle" font-size="10" fill="var(--text-3)">${sub}</text>` : ''}`;
+    <circle cx="${x}" cy="${y}" r="${r}" fill="var(--surface)" stroke="${color}" stroke-width="3"/>
+    <text x="${x}" y="${y - 13}" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">${label}</text>
+    ${sub ? `<text x="${x}" y="${y + 21}" text-anchor="middle" font-size="9.5" fill="var(--text-3)">${sub}</text>` : ''}`;
   return `
-  <svg viewBox="0 0 700 470" width="700" style="max-width:none">
+  <svg viewBox="0 0 820 470" width="820" style="max-width:none">
+    <!-- 九州新幹線 (另購) -->
+    <line x1="70" y1="70" x2="180" y2="70" stroke="#16a34a" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9"/>
     <!-- 山陽新幹線 -->
-    <line x1="150" y1="70" x2="640" y2="70" stroke="#2563eb" stroke-width="6" stroke-linecap="round"/>
-    <!-- 九州新幹線 -->
-    <line x1="150" y1="70" x2="150" y2="250" stroke="#16a34a" stroke-width="6" stroke-linecap="round"/>
-    <!-- 豐肥本線 -->
-    <line x1="150" y1="250" x2="320" y2="340" stroke="#ea580c" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 10"/>
-    <!-- 宮島支線 -->
-    <line x1="640" y1="70" x2="640" y2="240" stroke="#0d9488" stroke-width="5" stroke-linecap="round"/>
-    <line x1="640" y1="240" x2="640" y2="300" stroke="#0d9488" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9"/>
+    <line x1="180" y1="70" x2="650" y2="70" stroke="#2563eb" stroke-width="6" stroke-linecap="round"/>
     <!-- 下關在來線 -->
-    <line x1="270" y1="70" x2="270" y2="180" stroke="#e11d48" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9"/>
+    <line x1="280" y1="70" x2="280" y2="150" stroke="#e11d48" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9"/>
+    <!-- 宮島支線 + 渡輪 -->
+    <line x1="420" y1="70" x2="420" y2="140" stroke="#0d9488" stroke-width="5" stroke-linecap="round"/>
+    <line x1="420" y1="140" x2="420" y2="205" stroke="#0d9488" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9"/>
+    <!-- 瀨戶大橋 四國 -->
+    <line x1="540" y1="70" x2="540" y2="180" stroke="#d97706" stroke-width="5" stroke-linecap="round"/>
+    <!-- 關西在來 -->
+    <line x1="650" y1="70" x2="650" y2="140" stroke="#b91c1c" stroke-width="5" stroke-linecap="round"/>
+    <line x1="650" y1="140" x2="755" y2="140" stroke="#b91c1c" stroke-width="5" stroke-linecap="round"/>
+    <line x1="650" y1="140" x2="755" y2="210" stroke="#65a30d" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9"/>
+    <line x1="650" y1="140" x2="650" y2="255" stroke="#4f46e5" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 9"/>
 
-    ${S(640, 70, '廣島', '山陽新幹線', '#2563eb')}
-    ${S(500, 70, '新山口', '', '#2563eb', 5)}
-    ${S(380, 70, '新下関', '', '#2563eb', 5)}
-    ${S(270, 70, '小倉', '', '#2563eb')}
-    ${S(150, 70, '博多', '進出據點', '#4f46e5', 8)}
-    ${S(150, 250, '熊本', '九州新幹線', '#16a34a')}
-    ${S(320, 340, '阿蘇', '豐肥本線 特急', '#ea580c')}
-    ${S(640, 240, '宮島口', '', '#0d9488', 6)}
-    ${S(640, 300, '宮島 ⛴', '嚴島神社', '#0d9488')}
-    ${S(270, 180, '下関', '馬關 · 唐戸（巴士）', '#e11d48')}
+    ${S(70, 70, '熊本', '九州新幹線·另購', '#16a34a')}
+    ${S(180, 70, '博多', '周遊券啟用', '#4f46e5', 8)}
+    ${S(280, 70, '小倉', '', '#2563eb')}
+    ${S(420, 70, '廣島', '山陽新幹線', '#2563eb')}
+    ${S(540, 70, '岡山', '', '#7c3aed')}
+    ${S(650, 70, '新大阪', '', '#2563eb')}
+    ${S(280, 150, '下関', '馬關·唐戸（巴士）', '#e11d48')}
+    ${S(420, 140, '宮島口', '', '#0d9488', 6)}
+    ${S(420, 205, '宮島 ⛴', '嚴島神社', '#0d9488')}
+    ${S(540, 180, '高松', '瀨戶大橋·四國', '#d97706')}
+    ${S(650, 140, '大阪', '', '#db2777')}
+    ${S(755, 140, '京都', '新快速', '#b91c1c')}
+    ${S(755, 210, '奈良', '大和路', '#65a30d')}
+    ${S(650, 255, 'KIX ✈', '關西機場', '#4f46e5')}
 
     <!-- legend -->
     <g font-size="11" font-weight="600">
-      <rect x="20" y="400" width="660" height="56" rx="10" fill="var(--surface-2)"/>
-      <line x1="36" y1="418" x2="64" y2="418" stroke="#2563eb" stroke-width="5"/><text x="72" y="422" fill="var(--text-2)">山陽新幹線</text>
-      <line x1="170" y1="418" x2="198" y2="418" stroke="#16a34a" stroke-width="5"/><text x="206" y="422" fill="var(--text-2)">九州新幹線</text>
-      <line x1="304" y1="418" x2="332" y2="418" stroke="#0d9488" stroke-width="5"/><text x="340" y="422" fill="var(--text-2)">宮島支線</text>
-      <line x1="430" y1="418" x2="458" y2="418" stroke="#ea580c" stroke-width="5" stroke-dasharray="2 6"/><text x="466" y="422" fill="var(--text-2)">豐肥本線</text>
-      <line x1="560" y1="418" x2="588" y2="418" stroke="#e11d48" stroke-width="5" stroke-dasharray="2 6"/><text x="596" y="422" fill="var(--text-2)">在來線</text>
-      <text x="36" y="446" fill="var(--text-3)" font-weight="500">實線＝新幹線／渡輪　虛線＝在來線・特急　｜　持 SSNK 周遊券可搭新幹線（含のぞみ・みずほ）與 JR 宮島渡輪</text>
+      <rect x="20" y="395" width="780" height="60" rx="10" fill="var(--surface-2)"/>
+      <line x1="36" y1="416" x2="62" y2="416" stroke="#2563eb" stroke-width="5"/><text x="70" y="420" fill="var(--text-2)">山陽新幹線</text>
+      <line x1="170" y1="416" x2="196" y2="416" stroke="#16a34a" stroke-width="5" stroke-dasharray="2 6"/><text x="204" y="420" fill="var(--text-2)">九州新幹線(另購)</text>
+      <line x1="340" y1="416" x2="366" y2="416" stroke="#d97706" stroke-width="5"/><text x="374" y="420" fill="var(--text-2)">瀨戶大橋·四國</text>
+      <line x1="490" y1="416" x2="516" y2="416" stroke="#b91c1c" stroke-width="5"/><text x="524" y="420" fill="var(--text-2)">關西在來</text>
+      <line x1="610" y1="416" x2="636" y2="416" stroke="#0d9488" stroke-width="5"/><text x="644" y="420" fill="var(--text-2)">宮島·渡輪</text>
+      <text x="36" y="442" fill="var(--text-3)" font-weight="500">實線＝新幹線/渡輪　虛線＝在來線/另購　｜　Setouchi 周遊券含のぞみ·みずほ·マリンライナー·はるか與 JR 宮島渡輪（熊本→博多另購）</text>
     </g>
   </svg>`;
 }

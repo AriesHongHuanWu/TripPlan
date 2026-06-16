@@ -64,6 +64,14 @@ export function gmapDir(origin, destination, mode = 'transit') {
   const o = origin ? `&origin=${encodeURIComponent(origin)}` : '';
   return `https://www.google.com/maps/dir/?api=1${o}&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
 }
+/** Nearby hotels on Google Maps, centred on the given point (great for finding lodging along the way). */
+export function gmapHotels(lat, lng) {
+  return `https://www.google.com/maps/search/${encodeURIComponent('ホテル 飯店')}/@${lat},${lng},15z`;
+}
+/** Nearby hotels on Booking.com by area/place name. */
+export function bookingHotels(name) {
+  return `https://www.booking.com/searchresults.zh-tw.html?ss=${encodeURIComponent(name)}`;
+}
 
 // ---- Time helpers ------------------------------------------------------------
 export function parseHM(hm) { const [h, m] = (hm || '0:0').split(':').map(Number); return h * 60 + (m || 0); }

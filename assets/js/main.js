@@ -5,7 +5,7 @@
 import { TRIP, DAYS, CITIES, cityByKey, dayByDate, ROUTES, PASS, SOUVENIRS, TYPE_META } from './data.js';
 import {
   el, clear, icon, $, $$, toast, pad2, ymd, parseHM, nowMinutes,
-  haversineKm, fmtDistance, gmapPlace, gmapDir, DOW_TC,
+  haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC,
 } from './util.js';
 import { renderWeatherCity } from './weather.js';
 import { initMap, refreshMapSize, focusPlace, jrSchematicHTML } from './map.js';
@@ -222,6 +222,7 @@ function renderItem(it, isNow) {
   if (it.cost) foot.appendChild(el('span.chip', { style: { padding: '3px 8px', fontSize: '11px' } }, [icon('i-yen'), it.cost]));
   if (it.dur) foot.appendChild(el('span.tiny.muted-3', { text: '⏱ ' + it.dur }));
   if (it.lat) foot.appendChild(el('a.gmap-btn', { href: gmapPlace(it.title, it.lat, it.lng), target: '_blank', rel: 'noopener', style: { padding: '4px 10px', fontSize: '11px' }, onclick: e => e.stopPropagation() }, [icon('i-ext'), '導航']));
+  if (it.lat) foot.appendChild(el('a.gmap-btn', { href: gmapHotels(it.lat, it.lng), target: '_blank', rel: 'noopener', style: { padding: '4px 10px', fontSize: '11px', borderColor: 'var(--sakura)', color: 'var(--sakura)' }, onclick: e => e.stopPropagation() }, ['🏨 附近飯店']));
   card.appendChild(foot);
   body.push(el('.tl-body', {}, [card]));
   return el('.tl-item' + mod + (isNow ? '.tl-item--now' : ''), {}, [
@@ -315,7 +316,7 @@ function passTable() {
 }
 
 // ---------- Weather page ----------
-let wxCity = 'fukuoka';
+let wxCity = 'kumamoto';
 function buildWeatherPicker() {
   const p = $('#wxCityPick'); clear(p);
   CITIES.forEach(c => p.appendChild(el('.chip.chip--tap' + (c.key === wxCity ? '.is-on' : ''), { onclick: () => goWeather(c.key) }, [c.flag + ' ' + c.name.split(' ')[0]])));
@@ -327,8 +328,8 @@ function goWeather(cityKey) {
 }
 
 // ---------- Souvenirs page ----------
-let giftCity = 'fukuoka';
-const GIFT_CITIES = ['fukuoka', 'kumamoto', 'hiroshima', 'shimonoseki'];
+let giftCity = 'kumamoto';
+const GIFT_CITIES = ['kumamoto', 'fukuoka', 'hiroshima', 'shimonoseki', 'takamatsu', 'okayama', 'osaka', 'kyoto', 'nara'];
 function buildGiftPicker() {
   const p = $('#giftCityPick'); clear(p);
   GIFT_CITIES.forEach(k => { const c = cityByKey[k]; p.appendChild(el('.chip.chip--tap' + (k === giftCity ? '.is-on' : ''), { onclick: () => goSouvenirs(k) }, [c.flag + ' ' + c.name.split(' ')[0]])); });
@@ -373,6 +374,12 @@ function openPoiSheet(it) {
       el('a.btn.btn--brand', { href: gmapPlace(it.title, it.lat, it.lng), target: '_blank', rel: 'noopener' }, [icon('i-ext'), 'Google 導航']),
       el('button.btn', { onclick: () => { closeSheets(); showOnMap(it.title); } }, [icon('i-pin'), '在地圖查看']),
     ]));
+    body.appendChild(el('.h-section', { style: { marginTop: '18px' }, text: '附近住宿 · 沿途找飯店' }));
+    body.appendChild(el('.grid2', { style: { marginTop: '8px' } }, [
+      el('a.btn.btn--sakura', { href: gmapHotels(it.lat, it.lng), target: '_blank', rel: 'noopener' }, ['🏨 Google 地圖飯店']),
+      el('a.btn', { href: bookingHotels(it.title), target: '_blank', rel: 'noopener' }, ['🛏️ Booking.com']),
+    ]));
+    body.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '8px' }, text: '會以此地點為中心顯示附近飯店與即時房價，方便沿途比價入住。' }));
   }
   openSheet('sheet');
 }

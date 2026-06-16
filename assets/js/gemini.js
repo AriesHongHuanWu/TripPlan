@@ -1,9 +1,9 @@
 // ============================================================================
 // gemini.js — Gemini Flash chat + agent mode (function calling -> page control)
 // ============================================================================
-import { DAYS, PASS, TRIP, CITIES, cityByKey } from './data.js';
+import { DAYS, PASS, TRIP, CITIES, cityByKey, allPois } from './data.js';
 import { getCurrentSummary } from './weather.js';
-import { el, clear, icon, mdLite, gmapPlace, gmapDir, toast } from './util.js';
+import { el, clear, icon, mdLite, gmapPlace, gmapDir, gmapHotels, toast } from './util.js';
 
 const LS = { key: 'kp_gemini_key', model: 'kp_gemini_model', mode: 'kp_agent_on' };
 export function getCfg() {
@@ -33,14 +33,14 @@ function systemText() {
   return `你是「九州旅伴」— 一位專業、親切、簡潔的日本九州・本州自由行 AI 助理，使用繁體中文回答。
 你掌握使用者的完整 8 日行程（如下）。回答要具體、可執行；提到車次/時間時提醒以即時 Google Maps/JR 官方為準。
 你可以呼叫工具：get_status 取得使用者目前時間/位置/現在與下一個行程；get_weather 查即時天氣。
-${agentOn ? '【代理模式開啟】你還能操控 App：navigate 切換分頁、open_day 顯示某天、show_on_map 在地圖標出地點、open_google_maps 開啟導航、show_souvenirs 顯示伴手禮。當使用者要你「帶我看/打開/導航/顯示」時，主動呼叫對應工具，再用一句話說明你做了什麼。' : '【代理模式關閉】僅以文字回答，必要時建議使用者開啟代理模式以自動操控頁面。'}
+${agentOn ? '【代理模式開啟】你還能操控 App：navigate 切換分頁、open_day 顯示某天、show_on_map 在地圖標出地點、open_google_maps 開啟導航、show_souvenirs 顯示伴手禮、find_hotels 在地圖找某地點附近的飯店（使用者會沿途找住宿）。當使用者要你「帶我看/打開/導航/顯示/找飯店」時，主動呼叫對應工具，再用一句話說明你做了什麼。' : '【代理模式關閉】僅以文字回答，必要時建議使用者開啟代理模式以自動操控頁面。'}
 回答控制在 3–6 句，善用條列。\n\n${tripContext()}`;
 }
 
 // ---- tools ----
 const READ_TOOLS = [
   { name: 'get_status', description: '取得使用者目前當地時間、今天日期對應的行程、目前與下一個活動，以及（若已授權）所在位置與到下一站距離。回答「我現在/接下來要做什麼」時務必先呼叫。', parameters: { type: 'object', properties: {} } },
-  { name: 'get_weather', description: '取得指定城市即時天氣與今日高低溫、降雨機率。', parameters: { type: 'object', properties: { city: { type: 'string', description: '福岡/熊本/阿蘇/廣島/宮島/下關 之一' } }, required: ['city'] } },
+  { name: 'get_weather', description: '取得指定城市即時天氣與今日高低溫、降雨機率。', parameters: { type: 'object', properties: { city: { type: 'string', description: '熊本/福岡/下關/廣島/宮島/高松/岡山/大阪/京都/奈良 之一' } }, required: ['city'] } },
 ];
 const CONTROL_TOOLS = [
   { name: 'navigate', description: '切換 App 分頁。', parameters: { type: 'object', properties: { tab: { type: 'string', enum: ['today', 'plan', 'route', 'weather', 'gift', 'ai'] } }, required: ['tab'] } },
@@ -48,6 +48,7 @@ const CONTROL_TOOLS = [
   { name: 'show_on_map', description: '切到地圖分頁並標出某景點或車站。', parameters: { type: 'object', properties: { place: { type: 'string' } }, required: ['place'] } },
   { name: 'open_google_maps', description: '在新分頁開啟 Google 地圖。單點用 query；路線用 origin+destination（預設大眾運輸）。', parameters: { type: 'object', properties: { query: { type: 'string' }, origin: { type: 'string' }, destination: { type: 'string' }, mode: { type: 'string', enum: ['transit', 'walking', 'driving'] } } } },
   { name: 'show_souvenirs', description: '開啟伴手禮分頁並顯示某城市。', parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] } },
+  { name: 'find_hotels', description: '在 Google 地圖開啟某地點附近的飯店（含即時房價），用於沿途找住宿。', parameters: { type: 'object', properties: { place: { type: 'string', description: '景點或車站名' } }, required: ['place'] } },
 ];
 
 function resolveCity(name = '') {
@@ -72,6 +73,11 @@ async function execTool(call) {
         API.openMaps(url); return { label: '開啟 Google 導航', result: { url } };
       }
       case 'show_souvenirs': { const key = resolveCity(a.city); API.goSouvenirs(key); return { label: `顯示 ${cityByKey[key].name} 伴手禮`, result: { ok: true } }; }
+      case 'find_hotels': {
+        const p = allPois.find(p => p.name.includes(a.place) || a.place.includes(p.name) || (p.jp && p.jp.toLowerCase().includes(a.place.toLowerCase())));
+        const url = p ? gmapHotels(p.lat, p.lng) : `https://www.google.com/maps/search/${encodeURIComponent(a.place + ' ホテル')}`;
+        API.openMaps(url); return { label: `找「${a.place}」附近飯店`, result: { url } };
+      }
       default: return { label: call.name, result: { error: 'unknown tool' } };
     }
   } catch (e) { return { label: call.name, result: { error: String(e) } }; }
@@ -169,8 +175,8 @@ async function send(scroll, input) {
 
 const SUGGESTIONS = [
   '我現在該做什麼？', '明天怎麼去廣島？', '帶我看熊本城在哪',
-  '下關有什麼伴手禮？', '今天天氣如何？', '馬關條約在哪裡簽的？',
-  '幫我導航到嚴島神社', '宮島看大鳥居的最佳時間？',
+  '今天天氣如何？', '馬關條約在哪裡簽的？',
+  '幫我找廣島站附近的飯店', '幫我導航到嚴島神社',
 ];
 
 export function initGemini(api) {
