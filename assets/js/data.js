@@ -496,12 +496,15 @@ const D = (date, dow, cityKey, weatherKey, title, summary, items) =>
   ({ date, dow, cityKey, weatherKey, title, summary, items });
 
 export const DAYS = [
-  D('2026-06-17', '三', 'kumamoto', 'kumamoto', '抵達熊本 · 熊本城', '桃園✈熊本機場，巴士進城；登熊本城、城彩苑午餐、くまモン、水前寺。', [
-    { time: '13:00', type: 'arrive', title: '抵達熊本機場（KMJ）', jp: 'Kumamoto Airport', lat: 32.8372, lng: 130.8553, desc: '桃園直飛阿蘇熊本空港，入境領行李。' },
-    { time: '13:40', type: 'move', title: '機場巴士 → 桜町巴士總站', desc: 'リムジンバス直達市區（近熊本城），雨季帶行李最方便。', route: { fromStn: '阿蘇くまもと空港', toStn: '桜町バスターミナル', legs: [{ dep: '13:40', arr: '14:30', line: '產交リムジンバス', type: 'bus', dur: '約 50 分', note: '¥1,200；班次密集。或免費空港ライナー到肥後大津轉 JR（不含周遊券）。' }], fare: '¥1,200', pass: '（機場交通不含周遊券）' } },
-    { time: '15:00', type: 'stay', title: '飯店 Check-in / 寄物', lat: 32.8009, lng: 130.7066, desc: '建議住桜町／下通商店街一帶，鄰熊本城。' },
-    { time: '15:30', type: 'see', title: '熊本城 + 復原見學通路', jp: 'Kumamoto Castle', lat: 32.8060, lng: 130.7059, desc: '天守閣已重開；空中迴廊俯瞰震災修復（含於門票）。', cost: '¥800', dur: '2 小時' },
-    { time: '17:30', type: 'eat', title: '櫻之馬場 城彩苑 / 下通 晚餐', lat: 32.8035, lng: 130.7035, desc: '馬刺し・辛子蓮根・熊本ラーメン・太平燕。', dur: '90 分' },
+  D('2026-06-17', '三', 'kumamoto', 'kumamoto', '抵達熊本 · 熊本城', '桃園 06:00 早班機約 9 點抵熊本，巴士進城；熊本城、城彩苑午餐、くまモン、水前寺，一整天玩好玩滿。', [
+    { time: '09:00', type: 'arrive', title: '抵達熊本機場（KMJ）', jp: 'Kumamoto Airport', lat: 32.8372, lng: 130.8553, desc: '桃園 06:00 早班機，約 09:00 抵阿蘇熊本空港；入境、領行李。' },
+    { time: '09:45', type: 'move', title: '機場巴士 → 桜町巴士總站', desc: 'リムジンバス直達市區（近熊本城），雨季帶行李最方便。', route: { fromStn: '阿蘇くまもと空港', toStn: '桜町バスターミナル', legs: [{ dep: '09:45', arr: '10:35', line: '產交リムジンバス', type: 'bus', dur: '約 50 分', note: '¥1,200；班次密集。或搭免費空港ライナー到肥後大津轉 JR（不含周遊券）。' }], fare: '¥1,200', pass: '（機場交通不含周遊券）' } },
+    { time: '10:40', type: 'stay', title: '飯店寄放行李', lat: 32.8009, lng: 130.7066, desc: '入住多為 15:00；先寄放行李輕裝出發。建議住桜町／下通一帶，鄰熊本城。' },
+    { time: '11:00', type: 'see', title: '熊本城 + 復原見學通路', jp: 'Kumamoto Castle', lat: 32.8060, lng: 130.7059, desc: '天守閣已重開；空中迴廊俯瞰震災修復（含於門票）。', cost: '¥800', dur: '2.5 小時' },
+    { time: '13:30', type: 'eat', title: '櫻之馬場 城彩苑 午餐', lat: 32.8035, lng: 130.7035, desc: '馬刺し・辛子蓮根・いきなり団子・太平燕一次嚐。', dur: '75 分' },
+    { time: '14:45', type: 'see', title: 'くまモンスクエア', lat: 32.7975, lng: 130.7080, desc: '部長見面會多在 15:00；賣店掃くまモン伴手禮。', cost: '免費', dur: '60 分' },
+    { time: '15:45', type: 'see', title: '水前寺成趣園', jp: 'Suizenji', lat: 32.7905, lng: 130.7335, desc: '桃山式回遊庭園與迷你富士山；末入 16:30，把握時間。', cost: '¥500', dur: '60 分' },
+    { time: '17:30', type: 'eat', title: '下通 / 上通 晚餐', lat: 32.8000, lng: 130.7060, desc: '熊本ラーメン（焦香蒜油）或馬肉料理。', dur: '90 分' },
     { time: '19:30', type: 'stay', title: '熊本住宿', lat: 32.8009, lng: 130.7066, desc: '明日新幹線北上博多。' },
   ]),
   D('2026-06-18', '四', 'fukuoka', 'fukuoka', '熊本 → 博多 · 太宰府', '新幹線到博多（此段另購），太宰府天滿宮、櫛田／運河城，夜訪中洲屋台。', [

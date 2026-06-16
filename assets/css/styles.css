@@ -383,6 +383,8 @@ main {
 .wx-hour small { font-size: 11px; opacity: .85; }
 .wx-day { display: flex; align-items: center; gap: 12px; padding: 11px 6px; border-bottom: 1px solid var(--line); }
 .wx-day:last-child { border-bottom: 0; }
+.wx-day.is-visit { background: color-mix(in srgb, var(--brand-2) 7%, transparent); border-radius: 10px; padding: 11px 10px; border-bottom-color: transparent; }
+.wx-day.is-visit .wx-day__name { color: var(--brand-2); font-weight: 700; }
 .wx-day__name { width: 64px; font-weight: 650; font-size: 13px; }
 .wx-day__e { font-size: 22px; width: 30px; text-align:center; }
 .wx-day__bar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-3); position: relative; overflow: hidden; }

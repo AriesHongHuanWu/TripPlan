@@ -1,7 +1,7 @@
 // ============================================================================
 // weather.js — Open-Meteo live forecast (no API key). Per-city, JST.
 // ============================================================================
-import { CITIES, cityByKey, wmo } from './data.js';
+import { CITIES, cityByKey, wmo, DAYS } from './data.js';
 import { el, clear, icon, ymd, toast } from './util.js';
 
 const TRIP_END = '2026-06-24';
@@ -42,6 +42,13 @@ function wxGradient(code, isDay) {
 
 const WD = ['日', '一', '二', '三', '四', '五', '六'];
 
+// Which trip date(s) the user is in a given city (by itinerary city or weather city)
+function cityTripDates(cityKey) {
+  const out = [];
+  DAYS.forEach(d => { if (d.cityKey === cityKey || d.weatherKey === cityKey) out.push(d.date); });
+  return [...new Set(out)];
+}
+
 export async function renderWeatherCity(cityKey, root) {
   const city = cityByKey[cityKey] || CITIES[0];
   clear(root);
@@ -52,7 +59,9 @@ export async function renderWeatherCity(cityKey, root) {
   clear(root);
 
   const cur = data.current, [clab, cemo] = wmo(cur.weather_code);
+  const dl = data.daily;
   const grad = wxGradient(cur.weather_code, cur.is_day);
+  const visitDates = cityTripDates(city.key);
 
   // Hero
   const hero = el('.wx-hero', {}, [
@@ -81,6 +90,33 @@ export async function renderWeatherCity(cityKey, root) {
   ]);
   root.appendChild(hero);
 
+  // ★ Forecast for the day(s) you'll actually be in this city
+  if (visitDates.length) {
+    const items = visitDates.map(date => {
+      const idx = dl.time.indexOf(date);
+      if (idx < 0) return null;
+      const [lab, emo] = wmo(dl.weather_code[idx]);
+      const hi = Math.round(dl.temperature_2m_max[idx]), lo = Math.round(dl.temperature_2m_min[idx]);
+      const rain = dl.precipitation_probability_max[idx] ?? 0;
+      const adv = clothingAdvice({ hi, lo, rainProb: rain });
+      const dd = new Date(date + 'T00:00:00');
+      return el('.card.card--pad', { style: { marginBottom: '10px', border: '1px solid color-mix(in srgb, var(--brand-2) 40%, var(--line))' } }, [
+        el('.row', { style: { gap: '14px', alignItems: 'flex-start' } }, [
+          el('div', { style: { fontSize: '34px', lineHeight: '1' }, text: emo }),
+          el('div', { style: { flex: '1', minWidth: '0' } }, [
+            el('div', { style: { fontWeight: '700', fontSize: '15px' }, text: `${dd.getMonth() + 1}/${dd.getDate()}（週${WD[dd.getDay()]}）抵達 · ${lab}` }),
+            el('.tiny.muted', { style: { marginTop: '2px' }, text: `${lo}° / ${hi}° · 降雨機率 ${rain}%` }),
+            adv ? el('.row.wrap', { style: { gap: '6px', marginTop: '8px' } }, adv.items.slice(0, 4).map(it => el('span.chip', { style: { padding: '4px 9px', fontSize: '11px' }, text: `${it.e} ${it.t}` }))) : null,
+          ]),
+        ]),
+      ]);
+    }).filter(Boolean);
+    if (items.length) {
+      root.appendChild(el('.h-section', { style: { margin: '16px 2px 8px' }, text: '你抵達當天的天氣' }));
+      items.forEach(c => root.appendChild(c));
+    }
+  }
+
   // Hourly (next 18h from now)
   const hrs = data.hourly, nowIso = new Date();
   const startIdx = Math.max(0, hrs.time.findIndex(t => new Date(t) >= new Date(nowIso.getTime() - 3600e3)));
@@ -100,7 +136,6 @@ export async function renderWeatherCity(cityKey, root) {
   root.appendChild(hourCard);
 
   // Daily for the trip
-  const dl = data.daily;
   const tMax = Math.max(...dl.temperature_2m_max), tMin = Math.min(...dl.temperature_2m_min);
   const span = Math.max(1, tMax - tMin);
   const dayCard = el('.card.card--pad', { style: { marginTop: '14px' } }, [
@@ -110,8 +145,9 @@ export async function renderWeatherCity(cityKey, root) {
       const lo = dl.temperature_2m_min[i], hi = dl.temperature_2m_max[i];
       const left = ((lo - tMin) / span) * 100, w = ((hi - lo) / span) * 100;
       const isToday = ymd(d) === ymd(new Date());
-      return el('.wx-day', {}, [
-        el('.wx-day__name', { text: `${isToday ? '今天' : (d.getMonth() + 1) + '/' + d.getDate()} ${WD[d.getDay()]}` }),
+      const isVisit = visitDates.includes(ymd(d));
+      return el('.wx-day' + (isVisit ? '.is-visit' : ''), {}, [
+        el('.wx-day__name', { text: `${isToday ? '今天' : (d.getMonth() + 1) + '/' + d.getDate()} ${WD[d.getDay()]}${isVisit ? ' 📍' : ''}` }),
         el('.wx-day__e', { text: e }),
         el('.wx-day__bar', {}, [el('.wx-day__fill', { style: { left: left + '%', width: Math.max(8, w) + '%' } })]),
         el('.wx-day__t', { text: `${Math.round(lo)}° / ${Math.round(hi)}°` }),
