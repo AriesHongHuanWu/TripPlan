@@ -564,12 +564,14 @@ export const DAYS = [
     { time: '20:30', type: 'move', title: '京都 → 大阪', desc: 'JR 新快速回大阪約 28 分。', route: { fromStn: '京都駅', toStn: '大阪駅', legs: [{ dep: '20:30', arr: '20:58', line: 'JR 京都線 新快速', type: 'rapid', dur: '約 28 分', note: '周遊券可用。' }], fare: '周遊券可用', pass: 'Setouchi 周遊券可用' } },
     { time: '21:30', type: 'stay', title: '大阪住宿', lat: 34.7025, lng: 135.4959, desc: '明日奈良半日後赴機場。' },
   ]),
-  D('2026-06-24', '三', 'nara', 'nara', '奈良 → 關西機場 · 返程', '上午奈良東大寺與神鹿，午後關空快速／はるか到 KIX，賦歸。', [
+  D('2026-06-24', '三', 'nara', 'nara', '奈良 → 關西機場 · 返程', '上午奈良東大寺與神鹿，午後最後採購，傍晚 19:05 班機自關西機場返台（21:10 抵桃園）。', [
     { time: '08:30', type: 'move', title: '大阪 → 奈良', desc: 'JR 大和路快速約 50 分（周遊券在來線可用）。', route: ROUTES[8] },
     { time: '09:30', type: 'see', title: '東大寺 + 奈良公園神鹿', jp: 'Tōdai-ji', lat: 34.6889, lng: 135.8398, desc: '世界最大級木造大佛殿；公園放養鹿、鹿仙貝 ¥200。', cost: '東大寺 ¥800', dur: '2.5 小時' },
     { time: '12:00', type: 'eat', title: '奈良 午餐', lat: 34.6822, lng: 135.8316, desc: '柿の葉壽司、釜飯；採購鹿サブレ伴手。', dur: '60 分' },
-    { time: '13:30', type: 'move', title: '奈良 → 關西機場（天王寺轉乘）', desc: '大和路快速到天王寺，轉関空快速到 KIX；趕得及可改搭はるか。', route: ROUTES[9] },
-    { time: '15:30', type: 'depart', title: '關西機場（KIX）出發', jp: 'Kansai Airport', lat: 34.4339, lng: 135.2440, desc: '建議起飛前 2.5–3 小時抵達；八日九州・瀨戶內・關西之旅圓滿！' },
+    { time: '13:30', type: 'shop', title: '最後採購（奈良 / 回大阪）', lat: 34.7025, lng: 135.4959, desc: '回大阪心齋橋或新大阪駅 エキマルシェ補貨；明太子等冷藏品最後再買並要保冷劑。', dur: '90 分' },
+    { time: '15:30', type: 'move', title: '前往關西機場（KIX）', desc: '由奈良經天王寺轉関空快速，或由大阪/京都搭はるか；19:05 國際線抓 ~16:30 前抵達最穩。', route: ROUTES[9] },
+    { time: '17:00', type: 'stay', title: '抵達 KIX · 辦理登機', lat: 34.4339, lng: 135.2440, desc: '退稅、最後伴手禮；國際線建議起飛前 2–2.5 小時完成報到。' },
+    { time: '19:05', type: 'depart', title: '關西機場起飛 → 21:10 桃園', jp: 'Kansai Airport', lat: 34.4339, lng: 135.2440, desc: '班機 KIX 19:05 起飛、21:10 抵達桃園。八日九州・瀨戶內・關西之旅圓滿！' },
   ]),
 ];
 
