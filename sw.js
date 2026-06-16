@@ -1,10 +1,10 @@
 // Service worker — offline shell + installable PWA
-const CACHE = 'kyushu-plan-v1';
+const CACHE = 'kyushu-plan-v2';
 const ASSETS = [
   './', 'index.html',
   'assets/css/styles.css',
   'assets/js/main.js', 'assets/js/data.js', 'assets/js/util.js',
-  'assets/js/weather.js', 'assets/js/map.js', 'assets/js/gemini.js',
+  'assets/js/weather.js', 'assets/js/map.js', 'assets/js/gemini.js', 'assets/js/toolkit.js',
   'assets/icons/favicon.svg', 'manifest.webmanifest',
 ];
 

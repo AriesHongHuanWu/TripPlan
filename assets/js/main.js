@@ -5,11 +5,14 @@
 import { TRIP, DAYS, CITIES, cityByKey, dayByDate, ROUTES, PASS, SOUVENIRS, TYPE_META } from './data.js';
 import {
   el, clear, icon, $, $$, toast, pad2, ymd, parseHM, nowMinutes,
-  haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC,
+  haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC, favs,
 } from './util.js';
 import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.js';
 import { initMap, refreshMapSize, focusPlace, jrSchematicHTML } from './map.js';
 import { initGemini, getCfg } from './gemini.js';
+import { initToolkit, closeToolkit } from './toolkit.js';
+
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const PAGES = ['today', 'plan', 'route', 'weather', 'gift', 'ai'];
 let currentTab = 'today';
@@ -39,6 +42,8 @@ function goTab(tab) {
   if (tab === 'route') { ensureMap(); refreshMapSize(); }
   if (tab === 'today') renderToday();
   if (tab === 'weather') renderWeatherHero();
+  const sec = $('#page-' + tab);
+  if (sec && !reduceMotion()) sec.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
   window.scrollTo({ top: 0 });
 }
 
@@ -124,6 +129,7 @@ function renderToday() {
       body.push(el('.nowcard__next', {}, [el('div', { text: '今日行程已完成，好好休息 🛏️' })]));
     }
     root.appendChild(el('.nowcard', { style: { marginTop: '16px' } }, [el('.nowcard__bg'), el('.nowcard__body', {}, body)]));
+    root.appendChild(renderCommandCard(s));
   }
 
   // Weather snapshot
@@ -165,6 +171,31 @@ function renderToday() {
     el('button.btn.btn--brand', { onclick: () => { goTab('route'); } }, [icon('i-route'), '路線・地圖']),
     el('button.btn.btn--sakura', { onclick: () => { goTab('ai'); } }, [icon('i-ai'), '問 AI 旅伴']),
   ]));
+}
+
+// In-trip command center: day-progress ring + next-step countdown
+function renderCommandCard(s) {
+  const items = s.day.items.filter(x => x.type !== 'stay');
+  const startM = parseHM(items[0].time), endM = parseHM(items[items.length - 1].time);
+  const pct = Math.max(0, Math.min(100, Math.round((s.nm - startM) / Math.max(1, endM - startM) * 100)));
+  const nxt = s.next;
+  let countTxt = '今日行程已完成';
+  if (nxt) { const m = parseHM(nxt.time) - s.nm; countTxt = m > 60 ? `還有 ${Math.floor(m / 60)} 小時 ${m % 60} 分` : `還有 ${Math.max(0, m)} 分鐘`; }
+  return el('.card.card--pad', { style: { marginTop: '14px' } }, [
+    el('.cmd', {}, [
+      el('.ring', {}, [
+        el('.ring__fill', { style: { background: `conic-gradient(var(--brand-2) ${pct * 3.6}deg, var(--surface-3) 0)` } }),
+        el('.ring__hole', {}, [el('.ring__pct', { style: { animation: 'popIn .4s var(--ease)' }, text: pct + '%' }), el('.ring__lbl', { text: '今日進度' })]),
+      ]),
+      el('div', { style: { minWidth: '0' } }, [
+        el('.cmd__next-lbl', { text: nxt ? '下一步' : '狀態' }),
+        el('.cmd__next-title', { text: nxt ? `${nxt.time} ${nxt.title}` : '今日完成 🛏️' }),
+        nxt ? el('.cmd__count', {}, [icon('i-today'), countTxt]) : el('.tiny.muted', { style: { marginTop: '4px' }, text: '好好休息，明天見！' }),
+        nxt && nxt.lat ? el('a.btn.btn--brand.btn--sm', { href: lastPos ? gmapDir(`${lastPos.lat},${lastPos.lng}`, `${nxt.lat},${nxt.lng}`, 'transit') : gmapPlace(nxt.title, nxt.lat, nxt.lng), target: '_blank', rel: 'noopener', style: { marginTop: '10px' } }, [icon('i-pin'), '導航前往']) : null,
+      ]),
+    ]),
+    el('.dayprog', {}, [el('.dayprog__fill', { style: { width: pct + '%' } })]),
+  ]);
 }
 
 // ---------- Itinerary page ----------
@@ -400,11 +431,16 @@ function showOnMap(place) { goTab('route'); setRouteSeg('map'); ensureMap(); ref
 
 // ---------- Sheets ----------
 function openSheet(id) { $('#scrim').classList.add('is-open'); $('#' + id).classList.add('is-open'); }
-function closeSheets() { $('#scrim').classList.remove('is-open'); $('#sheet').classList.remove('is-open'); $('#settingsSheet').classList.remove('is-open'); }
+function closeSheets() { $('#scrim').classList.remove('is-open'); $('#sheet').classList.remove('is-open'); $('#settingsSheet').classList.remove('is-open'); const tk = $('#toolkitSheet'); if (tk) tk.classList.remove('is-open'); }
 function openPoiSheet(it) {
   $('#sheetTitle').textContent = it.title;
   const body = $('#sheetBody'); clear(body);
-  if (it.jp) body.appendChild(el('.muted-3.tiny', { style: { marginTop: '-4px', marginBottom: '8px' }, text: it.jp }));
+  const star = el('button.fav-btn' + (favs.has(it.title) ? '.is-fav' : ''), { title: '收藏' }, [icon('i-star')]);
+  star.addEventListener('click', () => { const on = favs.toggle(it.title); star.classList.toggle('is-fav', on); toast(on ? '已加入收藏 ⭐' : '已移除收藏'); });
+  body.appendChild(el('.row-between', { style: { marginTop: '-2px', marginBottom: '8px' } }, [
+    it.jp ? el('.muted-3.tiny', { text: it.jp }) : el('span'),
+    star,
+  ]));
   if (it.desc) body.appendChild(el('p', { style: { fontSize: '14.5px', lineHeight: '1.6' }, text: it.desc }));
   const chips = el('.row.wrap', { style: { gap: '8px', marginTop: '14px' } });
   if (it.cost) chips.appendChild(el('.chip', {}, [icon('i-yen'), it.cost]));
@@ -481,6 +517,30 @@ function requestLocation(auto) {
   }, err => { if (!auto) toast('無法取得位置：' + err.message); }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
 }
 
+// ---------- Motion ----------
+function initRipples() {
+  const sel = '.btn,.tab,.chip--tap,.gmap-btn,.tk-tile,.daypill,.send-btn,.mic-btn,.iconbtn,.fav-btn,.ph-speak,.emg-call';
+  document.addEventListener('pointerdown', e => {
+    if (reduceMotion()) return;
+    const host = e.target.closest && e.target.closest(sel);
+    if (!host) return;
+    host.classList.add('rippling');
+    const r = host.getBoundingClientRect();
+    const size = Math.max(r.width, r.height);
+    const span = document.createElement('span');
+    span.className = 'ripple';
+    span.style.width = span.style.height = size + 'px';
+    span.style.left = (e.clientX - r.left - size / 2) + 'px';
+    span.style.top = (e.clientY - r.top - size / 2) + 'px';
+    host.appendChild(span);
+    setTimeout(() => span.remove(), 600);
+  }, { passive: true });
+}
+function hideSplash() {
+  const sp = $('#splash'); if (!sp) return;
+  setTimeout(() => { sp.classList.add('hide'); setTimeout(() => sp.remove(), 600); }, 750);
+}
+
 // ---------- Init ----------
 function init() {
   initTheme();
@@ -516,6 +576,11 @@ function init() {
     status, goTab, openDay, showOnMap, goWeather, goSouvenirs,
     openMaps: url => window.open(url, '_blank', 'noopener'),
   });
+
+  // toolkit (錦囊) + motion
+  initToolkit({ showOnMap });
+  initRipples();
+  hideSplash();
 
   // clock — refresh Today every minute
   setInterval(() => { if (currentTab === 'today') renderToday(); if (currentTab === 'weather') renderWeatherHero(); }, 60000);

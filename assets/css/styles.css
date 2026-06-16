@@ -496,6 +496,123 @@ main {
 .stagger > *:nth-child(4){animation-delay:.12s} .stagger > *:nth-child(5){animation-delay:.16s}
 .stagger > *:nth-child(6){animation-delay:.2s} .stagger > *:nth-child(7){animation-delay:.24s}
 
+/* ========================================================================
+   MOTION SYSTEM — splash, ripple, transitions, micro-interactions
+   ====================================================================== */
+#splash {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: var(--grad-brand);
+  transition: opacity .55s var(--ease), visibility .55s var(--ease);
+}
+#splash.hide { opacity: 0; visibility: hidden; }
+.splash-inner { display: flex; flex-direction: column; align-items: center; gap: 16px; color: #fff; }
+.splash-logo {
+  width: 84px; height: 84px; border-radius: 24px; background: rgba(255,255,255,.16);
+  display: grid; place-items: center; box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 18px 50px rgba(0,0,0,.25);
+  animation: splashPop .7s var(--ease) both;
+}
+.splash-logo svg { width: 48px; height: 48px; }
+.splash-title { font-size: 19px; font-weight: 800; letter-spacing: .04em; animation: fadeUp .6s .15s var(--ease) both; }
+.splash-sub { font-size: 12.5px; font-weight: 600; opacity: .85; animation: fadeUp .6s .25s var(--ease) both; margin-top: -8px; }
+.splash-bar { width: 120px; height: 3px; border-radius: 999px; background: rgba(255,255,255,.3); overflow: hidden; margin-top: 6px; }
+.splash-bar::after { content:""; display: block; height: 100%; width: 40%; border-radius: 999px; background: #fff; animation: splashBar 1s var(--ease) infinite; }
+@keyframes splashPop { from { opacity: 0; transform: scale(.6) rotate(-8deg); } to { opacity: 1; transform: none; } }
+@keyframes splashBar { 0% { transform: translateX(-120%); } 100% { transform: translateX(360%); } }
+
+/* Ripple */
+.rippling { position: relative; overflow: hidden; }
+.ripple { position: absolute; border-radius: 50%; transform: scale(0); background: currentColor; opacity: .16; pointer-events: none; animation: rippleOut .6s var(--ease) forwards; }
+@keyframes rippleOut { to { transform: scale(2.4); opacity: 0; } }
+
+/* Tab bounce + active indicator dot */
+@keyframes tabPop { 0% { transform: scale(.78); } 55% { transform: scale(1.14); } 100% { transform: scale(1); } }
+.tab.is-active svg { animation: tabPop .42s var(--ease); }
+
+/* Page enter handled via WAAPI in JS; keep will-change hint */
+.page { will-change: opacity, transform; }
+
+/* Count-up / shimmer-in for numbers */
+@keyframes popIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+
+/* ========================================================================
+   COMMAND CENTER (Today) — progress ring + next-step
+   ====================================================================== */
+.cmd { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: center; }
+.ring { position: relative; width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; }
+.ring__fill { position: absolute; inset: 0; border-radius: 50%; }
+.ring__hole { position: absolute; inset: 8px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; }
+.ring__pct { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.ring__lbl { font-size: 9.5px; font-weight: 700; color: var(--text-3); letter-spacing: .08em; }
+.cmd__next-lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.cmd__next-title { font-size: 18px; font-weight: 750; margin-top: 3px; line-height: 1.2; }
+.cmd__count { font-size: 13px; font-weight: 650; color: var(--sakura); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+.dayprog { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin-top: 14px; }
+.dayprog__fill { height: 100%; border-radius: 999px; background: var(--grad-brand); transition: width .8s var(--ease); }
+
+/* ========================================================================
+   TOOLKIT (錦囊) — tool grid + sub-views
+   ====================================================================== */
+.tk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tk-tile {
+  display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1);
+  text-align: left; transition: transform .18s var(--ease), box-shadow .25s var(--ease);
+}
+.tk-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.tk-tile:active { transform: scale(.97); }
+.tk-tile__ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; }
+.tk-tile__t { font-weight: 700; font-size: 14.5px; }
+.tk-tile__d { font-size: 11.5px; color: var(--text-3); line-height: 1.4; }
+.tk-back { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; font-size: 13px; color: var(--brand-2); padding: 6px 0; }
+.tk-back svg { width: 18px; height: 18px; transform: rotate(180deg); }
+
+/* Phrasebook */
+.ph-cat { font-size: 13px; font-weight: 800; letter-spacing: .04em; margin: 18px 2px 8px; display: flex; align-items: center; gap: 8px; }
+.ph-item { padding: 12px 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); margin-bottom: 8px; cursor: pointer; transition: all .18s var(--ease); }
+.ph-item:hover { border-color: var(--brand-2); }
+.ph-zh { font-size: 13px; color: var(--text-3); }
+.ph-jp { font-size: 16px; font-weight: 650; margin-top: 2px; }
+.ph-ro { font-size: 12px; color: var(--brand-2); margin-top: 2px; }
+[data-theme="dark"] .ph-ro { color: #8ab4ff; }
+.ph-speak { float: right; width: 32px; height: 32px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; }
+.ph-speak svg { width: 16px; height: 16px; }
+
+/* Currency converter */
+.cc-row { display: flex; align-items: center; gap: 10px; padding: 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); margin-bottom: 10px; }
+.cc-flag { font-size: 26px; }
+.cc-cur { font-size: 12px; font-weight: 700; color: var(--text-3); }
+.cc-input { flex: 1; border: 0; background: none; font-size: 24px; font-weight: 700; text-align: right; width: 100%; min-width: 0; }
+.cc-input:focus { outline: none; }
+.cc-rate { font-size: 12px; color: var(--text-3); text-align: center; }
+.cc-quick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* Checklist */
+.ck-item { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.ck-box { width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--line-strong); flex: none; display: grid; place-items: center; transition: all .2s var(--ease); }
+.ck-box svg { width: 14px; height: 14px; color: #fff; opacity: 0; transform: scale(.5); transition: all .2s var(--ease); }
+.ck-item.done .ck-box { background: var(--brand-2); border-color: var(--brand-2); }
+.ck-item.done .ck-box svg { opacity: 1; transform: none; }
+.ck-item.done .ck-label { color: var(--text-3); text-decoration: line-through; }
+.ck-label { font-size: 14.5px; }
+
+/* Emergency card */
+.emg { border-radius: var(--r-lg); padding: 16px; color: #fff; background: var(--grad-sakura); box-shadow: var(--shadow-2); margin-bottom: 14px; }
+.emg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.22); }
+.emg-row:last-child { border-bottom: 0; }
+.emg-call { background: rgba(255,255,255,.22); padding: 7px 14px; border-radius: var(--r-pill); font-weight: 800; font-size: 15px; }
+.info-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; margin-bottom: 10px; }
+
+/* Bookings form */
+.bk-field { margin-bottom: 12px; }
+.bk-field label { font-size: 12px; font-weight: 600; color: var(--text-3); display: block; margin-bottom: 4px; }
+.bk-field input, .bk-field textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 14px; }
+
+/* Favorite star */
+.fav-btn { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-3); transition: all .2s var(--ease); flex: none; }
+.fav-btn svg { width: 19px; height: 19px; }
+.fav-btn.is-fav { color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, transparent); }
+.fav-btn.is-fav svg { fill: var(--gold); animation: tabPop .4s var(--ease); }
+
 /* ---------- Today weather + outfit card ---------------------------------- */
 .wx-today { position: relative; border-radius: var(--r-xl); overflow: hidden; color: #fff; box-shadow: var(--shadow-3); }
 .wx-today__bg { position: absolute; inset: 0; transition: background .6s var(--ease); }

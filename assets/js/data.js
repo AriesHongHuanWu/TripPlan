@@ -343,6 +343,116 @@ export const SOUVENIRS = {
   ],
 };
 
+// ---- In-trip essentials (錦囊) ----------------------------------------------
+export const PHRASES = [
+  { cat: '基本禮貌', emoji: '🙏', items: [
+    { zh: '你好', jp: 'こんにちは', ro: 'konnichiwa' },
+    { zh: '謝謝', jp: 'ありがとうございます', ro: 'arigatō gozaimasu' },
+    { zh: '不好意思／打擾了', jp: 'すみません', ro: 'sumimasen' },
+    { zh: '對不起', jp: 'ごめんなさい', ro: 'gomen nasai' },
+    { zh: '我聽不懂', jp: 'わかりません', ro: 'wakarimasen' },
+    { zh: '請說慢一點', jp: 'ゆっくり話してください', ro: 'yukkuri hanashite kudasai' },
+    { zh: '會說英文嗎？', jp: '英語は話せますか？', ro: 'eigo wa hanasemasu ka' },
+    { zh: '麻煩你了', jp: 'お願いします', ro: 'onegai shimasu' },
+  ] },
+  { cat: '交通・車站', emoji: '🚆', items: [
+    { zh: '請問XX在哪裡？', jp: 'XXはどこですか？', ro: 'XX wa doko desu ka' },
+    { zh: '這班車有到廣島嗎？', jp: 'この電車は広島に行きますか？', ro: 'kono densha wa Hiroshima ni ikimasu ka' },
+    { zh: '我要自由席', jp: '自由席をお願いします', ro: 'jiyūseki o onegai shimasu' },
+    { zh: '我有周遊券，要劃位', jp: 'パスがあります、座席指定をお願いします', ro: 'pasu ga arimasu, zaseki shitei o onegai shimasu' },
+    { zh: 'X號月台在哪？', jp: 'X番線はどこですか？', ro: 'X-bansen wa doko desu ka' },
+    { zh: '在哪裡轉乘？', jp: '乗り換えはどこですか？', ro: 'norikae wa doko desu ka' },
+    { zh: '下一班幾點？', jp: '次は何時ですか？', ro: 'tsugi wa nanji desu ka' },
+  ] },
+  { cat: '餐廳・點餐', emoji: '🍽️', items: [
+    { zh: '兩位', jp: '二人です', ro: 'futari desu' },
+    { zh: '請給我菜單', jp: 'メニューをください', ro: 'menyū o kudasai' },
+    { zh: '推薦是什麼？', jp: 'おすすめは何ですか？', ro: 'osusume wa nan desu ka' },
+    { zh: '請給我這個', jp: 'これをください', ro: 'kore o kudasai' },
+    { zh: '不要芥末', jp: 'わさび抜きで', ro: 'wasabi nuki de' },
+    { zh: '我要結帳', jp: 'お会計お願いします', ro: 'okaikei onegai shimasu' },
+    { zh: '很好吃！', jp: 'おいしいです！', ro: 'oishii desu' },
+  ] },
+  { cat: '購物・退稅', emoji: '🛍️', items: [
+    { zh: '多少錢？', jp: 'いくらですか？', ro: 'ikura desu ka' },
+    { zh: '可以刷卡嗎？', jp: 'カードで払えますか？', ro: 'kādo de haraemasu ka' },
+    { zh: '可以免稅嗎？', jp: '免税できますか？', ro: 'menzei dekimasu ka' },
+    { zh: '請幫我包裝', jp: '包んでください', ro: 'tsutsunde kudasai' },
+    { zh: '我只是看看', jp: '見ているだけです', ro: 'mite iru dake desu' },
+  ] },
+  { cat: '問路・飯店', emoji: '🏨', items: [
+    { zh: '我想去XX', jp: 'XXに行きたいです', ro: 'XX ni ikitai desu' },
+    { zh: '廁所在哪？', jp: 'トイレはどこですか？', ro: 'toire wa doko desu ka' },
+    { zh: '可以寄放行李嗎？', jp: '荷物を預けられますか？', ro: 'nimotsu o azukeraremasu ka' },
+    { zh: '我要 check in', jp: 'チェックインお願いします', ro: 'chekku-in onegai shimasu' },
+    { zh: '有空房嗎？', jp: '空いている部屋はありますか？', ro: 'aite iru heya wa arimasu ka' },
+  ] },
+  { cat: '緊急・身體不適', emoji: '🆘', items: [
+    { zh: '請幫幫我！', jp: '助けてください！', ro: 'tasukete kudasai' },
+    { zh: '我身體不舒服', jp: '気分が悪いです', ro: 'kibun ga warui desu' },
+    { zh: '我頭痛', jp: '頭が痛いです', ro: 'atama ga itai desu' },
+    { zh: '我肚子痛', jp: 'お腹が痛いです', ro: 'onaka ga itai desu' },
+    { zh: '最近的醫院在哪？', jp: '一番近い病院はどこですか？', ro: 'ichiban chikai byōin wa doko desu ka' },
+    { zh: '請叫救護車', jp: '救急車を呼んでください', ro: 'kyūkyūsha o yonde kudasai' },
+  ] },
+];
+
+export const EMERGENCY = {
+  numbers: [
+    { label: '警察（事件・事故・遺失）', num: '110', emoji: '🚓' },
+    { label: '火災・救護車', num: '119', emoji: '🚑' },
+    { label: '海上事故', num: '118', emoji: '🌊' },
+    { label: 'JNTO 訪日旅客諮詢熱線（24h・中文）', num: '050-3816-2787', emoji: '📞' },
+  ],
+  taiwanLine: { label: '外交部旅外國人急難救助', intl: '+886-800-085-095', note: '台灣境內直撥 0800-085-095；海外免付費 800-0885-0885（在日本撥 001 再撥 010-800-0885-0885）。僅限車禍／搶劫／生命安危／護照遺失等急難。' },
+  offices: [
+    { name: '台北駐大阪經濟文化辦事處', area: '轄 廣島・宮島・高松・岡山・大阪・京都・奈良・KIX', tel: '06-6227-8623', emg: '090-8794-4568', addr: '大阪市北区中之島2-3-18 中之島フェスティバルタワー 17F', url: 'https://www.roc-taiwan.org/jposa/' },
+    { name: '台北駐大阪經濟文化辦事處 福岡分處', area: '轄 熊本・福岡・下關（山口）等九州', tel: '092-734-2810', emg: '090-1922-9740', addr: '福岡市中央区桜坂3-12-42', url: 'https://www.roc-taiwan.org/jpfuk/' },
+  ],
+  steps: [
+    '護照遺失：先到最近的警察局（交番）報案，取得「遺失證明」。',
+    '再聯絡上方台灣駐處（依所在地選大阪或福岡分處），辦理入國證明書或臨時護照。',
+    'JR Pass 遺失通常無法補發，請妥善保管；信用卡遺失立即打發卡行止付。',
+    '地震時：護頭、遠離窗戶玻璃，依 NHK / Safety tips App 指示避難。',
+  ],
+};
+
+export const PACKING = [
+  '護照 + 影本/電子檔', '回程機票/登機證', 'JR Setouchi 周遊券兌換券', '日幣現金 + 信用卡',
+  'ICOCA / Suica 卡', '手機 + 充電器 + 行動電源', 'eSIM / 口袋 WiFi', '萬用轉接頭（日本 A 型）',
+  '摺疊傘 / 輕便雨衣（梅雨季）', '防水好走的鞋', '常備藥 + 個人藥品', '保溫瓶',
+  '保冷袋（買明太子/河豚用）', '購物環保袋', '健保卡/旅平險資料', '盥洗用品',
+];
+
+export const CURRENCY = { rate: 0.213, note: '約略匯率（1 日圓 ≈ 0.21 台幣），請依當日銀行匯率為準；可在設定調整。' };
+
+export const TIPS = {
+  taxfree: [
+    '消費稅 10%；同店同日「一般物品」或「消耗品」各滿 ¥5,000（未稅）可辦免稅。',
+    '結帳時在 Tax-Free 櫃台出示護照辦理；消耗品會密封包裝，離境前請勿拆封。',
+    '藥妝（唐吉訶德/松本清）、百貨、電器行多可直接店內免稅。',
+    '消耗品上限 ¥50 萬；「離境機場退稅」新制 2026/11 才上路，本趟 6 月仍用現行店內免稅。',
+  ],
+  iccard: [
+    'ICOCA / Suica 可搭 JR、地下鐵、私鐵、巴士、市電，也能在便利商店、置物櫃付款。',
+    '周遊券沒涵蓋的段落（熊本→博多九州新幹線、市電、廣電、近鐵、巴士）改用 IC 卡或現金。',
+    '用周遊券劃位：綠色售票機或綠色窗口（みどりの窓口）免費；マリンライナー上層、はるか指定席都可預約。',
+    '新幹線「自由席」免劃位直接坐；尖峰建議先劃「指定席」。',
+  ],
+  connectivity: [
+    '上網：抵達熊本機場/關西機場可取 eSIM 或租口袋 WiFi；eSIM 最方便（出發前先買）。',
+    '領現金：7-11 Seven Bank、郵局 JP Post ATM 可用海外卡提領日幣。',
+    '行李：車站投幣置物櫃（小 ¥400 起）；或用宅急便把行李送到下個飯店/機場（手ぶら観光）。',
+  ],
+  etiquette: [
+    '不用給小費；電車內保持安靜、勿講電話，背包請前背。',
+    '關西手扶梯「靠右站、左側通行」（與東京相反）。',
+    '垃圾桶少，隨身帶垃圾袋；確實做好分類。',
+    '神社參拜：鳥居前一鞠躬，手水舍洗手，二拜二拍手一拜。',
+    '梅雨季悶熱多雨：穿防水鞋、隨身帶傘，多排室內景點備案。',
+  ],
+};
+
 // ---- 8-day itinerary --------------------------------------------------------
 const D = (date, dow, cityKey, weatherKey, title, summary, items) =>
   ({ date, dow, cityKey, weatherKey, title, summary, items });

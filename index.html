@@ -58,8 +58,24 @@
     <symbol id="i-drop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></symbol>
     <symbol id="i-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h11a2.5 2.5 0 1 0-2.5-2.5M3 16h15a2.5 2.5 0 1 1-2.5 2.5"/></symbol>
     <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.8l1.1-6.5L2.6 9.8l6.5-.9Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9Z"/><path d="M17 8a5 5 0 0 1 0 8"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.1 9.6a16 16 0 0 0 6 6l1.2-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5Z"/></symbol>
+    <symbol id="i-yen2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l5 7 5-7M12 11v9M8 14h8M8 17h8"/></symbol>
   </defs>
 </svg>
+
+<!-- ===== Launch splash ===== -->
+<div id="splash">
+  <div class="splash-inner">
+    <div class="splash-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4" fill="#fff" stroke="none"/></svg></div>
+    <div class="splash-title">九州 · 瀨戶內 · 關西</div>
+    <div class="splash-sub">JR 單程自由行 · 6/17–6/24</div>
+    <div class="splash-bar"></div>
+  </div>
+</div>
 
 <div id="app">
   <!-- ===== App bar ===== -->
@@ -73,6 +89,7 @@
     </div>
     <div class="appbar__spacer"></div>
     <button class="iconbtn iconbtn--live" id="locBtn" title="定位"><svg><use href="#i-loc"/></svg></button>
+    <button class="iconbtn" id="toolkitBtn" title="旅遊錦囊"><svg><use href="#i-tools"/></svg></button>
     <button class="iconbtn" id="themeBtn" title="深色 / 淺色"><svg><use href="#i-moon"/></svg></button>
     <button class="iconbtn" id="settingsBtn" title="設定"><svg><use href="#i-gear"/></svg></button>
   </header>
@@ -184,6 +201,16 @@
     <button class="iconbtn" id="sheetClose"><svg><use href="#i-close"/></svg></button>
   </div>
   <div class="sheet__body" id="sheetBody"></div>
+</div>
+
+<!-- ===== Toolkit (錦囊) sheet ===== -->
+<div class="sheet" id="toolkitSheet" role="dialog" aria-modal="true" style="max-height:92vh">
+  <div class="sheet__grab"></div>
+  <div class="sheet__head">
+    <span class="sheet__title" id="toolkitTitle">旅遊錦囊</span>
+    <button class="iconbtn" id="toolkitClose"><svg><use href="#i-close"/></svg></button>
+  </div>
+  <div class="sheet__body" id="toolkitBody"></div>
 </div>
 
 <!-- ===== Settings sheet ===== -->

@@ -94,6 +94,17 @@ export function fmtDistance(km) {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(km < 10 ? 1 : 0)} km`;
 }
 
+// ---- localStorage JSON store + favorites ------------------------------------
+export const store = {
+  get(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+export const favs = {
+  list() { return store.get('kp_favs', []); },
+  has(name) { return favs.list().includes(name); },
+  toggle(name) { const a = favs.list(); const i = a.indexOf(name); if (i >= 0) a.splice(i, 1); else a.push(name); store.set('kp_favs', a); return i < 0; },
+};
+
 // ---- Toast -------------------------------------------------------------------
 let toastTimer;
 export function toast(msg, ms = 2200) {
