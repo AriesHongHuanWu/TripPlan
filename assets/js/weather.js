@@ -20,7 +20,7 @@ export async function fetchWeather(city) {
     latitude: city.lat, longitude: city.lng, timezone: 'Asia/Tokyo',
     current: 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
     hourly: 'temperature_2m,precipitation_probability,weather_code',
-    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max',
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset',
     start_date: today, end_date: end,
   }).toString();
 
@@ -75,7 +75,7 @@ export async function renderWeatherCity(cityKey, root) {
       el('.wx-meta', {}, [
         el('span', {}, [icon('i-drop'), ` 濕度 ${cur.relative_humidity_2m}%`]),
         el('span', {}, [icon('i-wind'), ` 風 ${Math.round(cur.wind_speed_10m)} km/h`]),
-        el('span', {}, [icon('i-drop'), ` 降水 ${cur.precipitation} mm`]),
+        dl.sunrise && dl.sunrise[0] ? el('span', { text: `🌅 ${String(dl.sunrise[0]).slice(11, 16)}  🌇 ${String(dl.sunset[0]).slice(11, 16)}` }) : null,
       ]),
     ]),
   ]);
@@ -149,12 +149,14 @@ export async function getCurrentSummary(cityKey) {
     const data = await fetchWeather(city);
     const cur = data.current, [lab, emo] = wmo(cur.weather_code);
     const todayIdx = 0, dl = data.daily;
+    const hhmm = s => (s ? String(s).slice(11, 16) : null);
     return {
       city: city.name, emoji: emo, label: lab,
       temp: Math.round(cur.temperature_2m), feels: Math.round(cur.apparent_temperature),
       humidity: cur.relative_humidity_2m, wind: Math.round(cur.wind_speed_10m),
       hi: Math.round(dl.temperature_2m_max[todayIdx]), lo: Math.round(dl.temperature_2m_min[todayIdx]),
       rainProb: dl.precipitation_probability_max[todayIdx] ?? 0,
+      sunrise: hhmm(dl.sunrise && dl.sunrise[todayIdx]), sunset: hhmm(dl.sunset && dl.sunset[todayIdx]),
     };
   } catch { return null; }
 }

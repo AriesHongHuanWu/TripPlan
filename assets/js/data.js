@@ -453,6 +453,44 @@ export const TIPS = {
   ],
 };
 
+// ---- Miyajima tide table (大鳥居) — 2026/06, verify live before going --------
+export const TIDE = {
+  floatCm: 250, walkCm: 100,
+  note: '潮位 >250cm 可看「海上浮鳥居」；<100cm 可走到鳥居腳下。出發前請以即時潮汐表再確認。',
+  days: {
+    '2026-06-17': { high: [['09:29', 327], ['22:25', 381]], low: [['03:44', 94], ['15:52', -15]] },
+    '2026-06-18': { high: [['10:10', 322], ['23:13', 376]], low: [['04:28', 104], ['16:35', -17]] },
+    '2026-06-19': { high: [['10:52', 314]], low: [['05:13', 116], ['17:20', -9]] },
+    '2026-06-20': { high: [['11:37', 302], ['24:01', 365]], low: [['06:01', 129], ['18:07', 10]] },
+    '2026-06-21': { high: [['12:27', 287]], low: [['06:54', 140], ['18:59', 35]] },
+    '2026-06-22': { high: [['13:26', 270]], low: [['07:54', 147], ['19:57', 64]] },
+    '2026-06-23': { high: [['14:39', 256]], low: [['09:02', 147], ['21:04', 92]] },
+    '2026-06-24': { high: [['16:08', 253]], low: [['10:16', 138], ['22:19', 114]] },
+  },
+};
+
+// ---- Budget defaults --------------------------------------------------------
+export const BUDGET = {
+  fixed: [
+    { label: 'JR Setouchi 周遊券', amount: 22000 },
+    { label: '熊本→博多 九州新幹線', amount: 5310 },
+    { label: '機場巴士 + IC 卡儲值（估）', amount: 6000 },
+  ],
+  mealsPerDay: 4000,
+  hotelPerNight: 9000,
+  nights: 7,
+  catLabels: { food: '🍽️ 餐食', transit: '🚆 交通', shop: '🛍️ 購物', sight: '🎫 門票', hotel: '🏨 住宿', other: '📦 其他' },
+};
+export function admissionTotal() {
+  let sum = 0;
+  for (const d of DAYS) for (const it of d.items) {
+    if (!it.cost) continue;
+    const m = String(it.cost).replace(/,/g, '').match(/¥\s?(\d+)/);
+    if (m) sum += parseInt(m[1], 10);
+  }
+  return sum;
+}
+
 // ---- 8-day itinerary --------------------------------------------------------
 const D = (date, dow, cityKey, weatherKey, title, summary, items) =>
   ({ date, dow, cityKey, weatherKey, title, summary, items });

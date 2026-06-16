@@ -2,13 +2,13 @@
 // main.js — app orchestrator: tabs, theme, time/location-aware Today,
 // itinerary, routes, weather, souvenirs, settings, Gemini control API.
 // ============================================================================
-import { TRIP, DAYS, CITIES, cityByKey, dayByDate, ROUTES, PASS, SOUVENIRS, TYPE_META } from './data.js';
+import { TRIP, DAYS, CITIES, cityByKey, dayByDate, ROUTES, PASS, SOUVENIRS, TYPE_META, TIDE, allPois } from './data.js';
 import {
   el, clear, icon, $, $$, toast, pad2, ymd, parseHM, nowMinutes,
   haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC, favs,
 } from './util.js';
 import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.js';
-import { initMap, refreshMapSize, focusPlace, jrSchematicHTML } from './map.js';
+import { initMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
 import { initGemini, getCfg } from './gemini.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
 
@@ -42,6 +42,7 @@ function goTab(tab) {
   if (tab === 'route') { ensureMap(); refreshMapSize(); }
   if (tab === 'today') renderToday();
   if (tab === 'weather') renderWeatherHero();
+  if (tab === 'plan' && curDayPts.length) renderDayMiniMap('dayMiniMap', curDayPts);
   const sec = $('#page-' + tab);
   if (sec && !reduceMotion()) sec.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
   window.scrollTo({ top: 0 });
@@ -199,6 +200,24 @@ function renderCommandCard(s) {
 }
 
 // ---------- Itinerary page ----------
+let curDayPts = [];
+function renderTideCard(date) {
+  const t = TIDE.days[date];
+  const floatT = t.high.filter(h => h[1] >= TIDE.floatCm).map(h => h[0]);
+  const walkT = t.low.filter(l => l[1] <= TIDE.walkCm).map(l => l[0]);
+  const row = (label, arr, color) => el('.row', { style: { gap: '10px', padding: '4px 0', alignItems: 'baseline' } }, [
+    el('span', { style: { width: '40px', fontSize: '12px', fontWeight: '700', color }, text: label }),
+    el('span', { style: { fontSize: '13px' }, text: arr.map(a => `${a[0]} (${a[1]}cm)`).join('、') }),
+  ]);
+  return el('.card.card--pad', { style: { marginTop: '14px', background: 'linear-gradient(135deg, color-mix(in srgb, #0d9488 12%, transparent), transparent)' } }, [
+    el('.row-between', {}, [el('.h-card', { text: '🌊 宮島大鳥居 潮汐' }), el('span.chip', { text: date.slice(5) })]),
+    el('div', { style: { marginTop: '8px' } }, [row('滿潮', t.high, 'var(--brand-2)'), row('乾潮', t.low, 'var(--sakura)')]),
+    el('.divider'),
+    el('.tiny', { style: { color: 'var(--text-2)', lineHeight: '1.7' }, html: `🛶 <b>看海上浮鳥居</b>（>250cm）：${floatT.length ? floatT.join('、') : '今日較不明顯'}<br>👣 <b>走到鳥居腳</b>（<100cm）：${walkT.length ? walkT.join('、') : '今日無'}` }),
+    el('p', { class: 'tiny muted-3', style: { marginTop: '8px' }, text: TIDE.note }),
+  ]);
+}
+
 function renderDayPicker() {
   const dp = $('#dayPick'); clear(dp);
   const todayDs = ymd(new Date());
@@ -231,6 +250,17 @@ function renderDayDetail(i) {
       el('button.gmap-btn', { onclick: () => { showOnMap(d.items.find(x => x.lat)?.title || c.name); } }, [icon('i-pin'), '地圖']),
     ]),
   ]));
+
+  // Miyajima tide card (on the day that visits 宮島)
+  if (TIDE.days[d.date] && d.items.some(it => /宮島|嚴島|大鳥居/.test(it.title))) root.appendChild(renderTideCard(d.date));
+
+  // Per-day mini map
+  curDayPts = d.items.filter(it => it.lat && it.type !== 'move' && it.type !== 'stay').map(it => ({ name: it.title, lat: it.lat, lng: it.lng }));
+  if (curDayPts.length) {
+    root.appendChild(el('.h-section', { style: { margin: '18px 2px 8px' }, text: '當日地圖 · 依序' }));
+    root.appendChild(el('div', { id: 'dayMiniMap' }));
+    renderDayMiniMap('dayMiniMap', curDayPts);
+  }
 
   const tl = el('.timeline', { style: { marginTop: '14px' } });
   tl.appendChild(el('.tl-rail'));
@@ -374,7 +404,7 @@ async function renderWeatherHero() {
         el('.wx-today__emoji', { text: w.emoji }),
         el('div', {}, [
           el('.wx-today__temp', { text: `${w.temp}°` }),
-          el('.wx-today__meta', { text: `${w.label} · 體感 ${w.feels}° · ${w.lo}° / ${w.hi}° · 降雨 ${w.rainProb}%` }),
+          el('.wx-today__meta', { text: `${w.label} · 體感 ${w.feels}° · ${w.lo}°/${w.hi}° · 降雨 ${w.rainProb}%${w.sunrise ? ` · 🌅${w.sunrise} 🌇${w.sunset}` : ''}` }),
         ]),
       ]),
       adv ? el('.wx-today__wear', {}, [
@@ -431,7 +461,35 @@ function showOnMap(place) { goTab('route'); setRouteSeg('map'); ensureMap(); ref
 
 // ---------- Sheets ----------
 function openSheet(id) { $('#scrim').classList.add('is-open'); $('#' + id).classList.add('is-open'); }
-function closeSheets() { $('#scrim').classList.remove('is-open'); $('#sheet').classList.remove('is-open'); $('#settingsSheet').classList.remove('is-open'); const tk = $('#toolkitSheet'); if (tk) tk.classList.remove('is-open'); }
+function closeSheets() { $('#scrim').classList.remove('is-open'); ['#sheet', '#settingsSheet', '#toolkitSheet', '#searchSheet'].forEach(s => { const e = $(s); if (e) e.classList.remove('is-open'); }); }
+
+// ---------- Global search ----------
+let searchIndex = null;
+function buildSearchIndex() {
+  const idx = [];
+  allPois.forEach(p => idx.push({ kw: (p.name + ' ' + (p.jp || '') + ' ' + p.cityName).toLowerCase(), label: p.name, sub: p.cityName + (p.jp ? ' · ' + p.jp : ''), emoji: p.emoji || '📍', run: () => { closeSheets(); showOnMap(p.name); } }));
+  DAYS.forEach((d, i) => idx.push({ kw: (d.title + ' ' + d.date + ' ' + cityByKey[d.cityKey].name).toLowerCase(), label: `Day ${i + 1} · ${d.title}`, sub: `${d.date}（週${d.dow}）`, emoji: '🗓️', run: () => { closeSheets(); openDay(i + 1); } }));
+  ROUTES.forEach(r => idx.push({ kw: (r.from + ' ' + r.to + ' ' + (r.line || '')).toLowerCase(), label: `${r.from} → ${r.to}`, sub: r.line || '交通', emoji: '🚆', run: () => { closeSheets(); goTab('route'); setRouteSeg('trips'); } }));
+  Object.keys(SOUVENIRS).forEach(k => idx.push({ kw: ('伴手禮 omiyage ' + cityByKey[k].name).toLowerCase(), label: `${cityByKey[k].name} 伴手禮`, sub: '必買清單', emoji: '🎁', run: () => { closeSheets(); goSouvenirs(k); } }));
+  return idx;
+}
+function openSearch() {
+  if (!searchIndex) searchIndex = buildSearchIndex();
+  $('#scrim').classList.add('is-open'); $('#searchSheet').classList.add('is-open');
+  const inp = $('#searchInput'); inp.value = ''; renderSearch(''); setTimeout(() => inp.focus(), 280);
+}
+function renderSearch(q) {
+  const root = $('#searchResults'); clear(root);
+  q = (q || '').trim().toLowerCase();
+  let items = q ? searchIndex.filter(x => x.kw.includes(q)) : searchIndex.filter(x => x.emoji === '🗓️');
+  if (!q) root.appendChild(el('.tiny.muted-3', { style: { padding: '2px 6px 10px' }, text: '試試：熊本城、嚴島神社、廣島、伴手禮、Day 5…' }));
+  items = items.slice(0, 30);
+  if (!items.length) { root.appendChild(el('.empty', {}, [el('.empty__emoji', { text: '🔍' }), el('div', { text: '找不到結果' })])); return; }
+  items.forEach(it => root.appendChild(el('.sr-item', { onclick: it.run }, [
+    el('.sr-ico', { text: it.emoji }),
+    el('div', { style: { minWidth: '0' } }, [el('.sr-label', { text: it.label }), el('.sr-sub', { text: it.sub })]),
+  ])));
+}
 function openPoiSheet(it) {
   $('#sheetTitle').textContent = it.title;
   const body = $('#sheetBody'); clear(body);
@@ -551,6 +609,9 @@ function init() {
   $('#themeBtn').addEventListener('click', () => { setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); });
   $('#settingsBtn').addEventListener('click', openSettings);
   $('#locBtn').addEventListener('click', () => requestLocation(false));
+  $('#searchBtn').addEventListener('click', openSearch);
+  $('#searchClose').addEventListener('click', closeSheets);
+  $('#searchInput').addEventListener('input', e => renderSearch(e.target.value));
   // sheets
   $('#scrim').addEventListener('click', closeSheets);
   $('#sheetClose').addEventListener('click', closeSheets);

@@ -105,6 +105,16 @@ export const favs = {
   toggle(name) { const a = favs.list(); const i = a.indexOf(name); if (i >= 0) a.splice(i, 1); else a.push(name); store.set('kp_favs', a); return i < 0; },
 };
 
+// ---- Download a generated file (e.g. .ics) -----------------------------------
+export function downloadText(filename, text, mime = 'text/plain') {
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ---- Toast -------------------------------------------------------------------
 let toastTimer;
 export function toast(msg, ms = 2200) {

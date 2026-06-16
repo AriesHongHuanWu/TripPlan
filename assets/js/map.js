@@ -5,6 +5,9 @@ import { CITIES, allPois } from './data.js';
 import { gmapPlace, gmapHotels } from './util.js';
 
 let map, markerIndex = {}, inited = false;
+const tileUrl = () => document.documentElement.dataset.theme === 'dark'
+  ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+  : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
 // Rail corridors (approx waypoints) for polylines — 熊本 → 關西 single-trip
 const RAIL = [
@@ -25,7 +28,7 @@ export function initMap(onWeather) {
   inited = true;
 
   map = L.map(elMap, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([34.0, 133.1], 6);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  L.tileLayer(tileUrl(), {
     attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, subdomains: 'abcd',
   }).addTo(map);
   map.fitBounds([[32.55, 130.25], [35.15, 135.95]], { padding: [12, 12] });
@@ -61,6 +64,30 @@ export function initMap(onWeather) {
 }
 
 export function refreshMapSize() { if (map) setTimeout(() => map.invalidateSize(), 60); }
+
+// ---- Per-day mini map (itinerary) ----
+let dayMap;
+export function renderDayMiniMap(elId, points) {
+  if (typeof L === 'undefined') return;
+  const elx = document.getElementById(elId); if (!elx) return;
+  if (dayMap) { try { dayMap.remove(); } catch {} dayMap = null; }
+  if (!points || !points.length) return;
+  dayMap = L.map(elx, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, dragging: true });
+  L.tileLayer(tileUrl(), { subdomains: 'abcd', maxZoom: 18 }).addTo(dayMap);
+  const latlngs = [];
+  points.forEach((p, i) => {
+    latlngs.push([p.lat, p.lng]);
+    L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: numMarker(i + 1), iconSize: [26, 26], iconAnchor: [13, 13] }) })
+      .addTo(dayMap).bindPopup(`<b>${i + 1}. ${p.name}</b>`);
+  });
+  if (latlngs.length > 1) L.polyline(latlngs, { color: '#2563eb', weight: 3, opacity: .55, dashArray: '4 7' }).addTo(dayMap);
+  if (latlngs.length === 1) dayMap.setView(latlngs[0], 14);
+  else dayMap.fitBounds(latlngs, { padding: [26, 26], maxZoom: 14 });
+  setTimeout(() => { if (dayMap) dayMap.invalidateSize(); }, 140);
+}
+function numMarker(n) {
+  return `<div style="width:26px;height:26px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.35),0 0 0 2px #fff">${n}</div>`;
+}
 
 export function focusPlace(name) {
   if (!map) return false;
