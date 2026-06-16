@@ -1,0 +1,16 @@
+{
+  "name": "九州・本州・四國 JR 自由行",
+  "short_name": "九州遊",
+  "description": "九州・本州・四國 8 日 JR 自由行完整規劃：即時天氣、路線導航、伴手禮指南與 Gemini AI 旅伴。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0c12",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "lang": "zh-Hant",
+  "categories": ["travel", "navigation", "lifestyle"],
+  "icons": [
+    { "src": "assets/icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
