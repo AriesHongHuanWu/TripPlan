@@ -105,6 +105,9 @@ input, textarea, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 6px; }
 ::selection { background: rgba(99,102,241,.25); }
 
+/* sprite icon default size — overridden by any `.context svg` rule (higher specificity) */
+.ic { width: 1.1em; height: 1.1em; flex: none; }
+
 /* Scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }

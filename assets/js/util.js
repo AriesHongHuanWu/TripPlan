@@ -32,10 +32,11 @@ export function el(spec, props = {}, children = []) {
   return node;
 }
 
-/** Use an SVG sprite icon: icon('i-pin') -> <svg><use href="#i-pin"/></svg> */
+/** Use an SVG sprite icon: icon('i-pin') -> <svg class="ic"><use href="#i-pin"/></svg>
+ *  Always carries the `.ic` base class so it has a sane default size in any context. */
 export function icon(id, cls = '') {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  if (cls) svg.setAttribute('class', cls);
+  svg.setAttribute('class', ('ic ' + cls).trim());
   const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
   use.setAttribute('href', '#' + id);
   svg.appendChild(use);
