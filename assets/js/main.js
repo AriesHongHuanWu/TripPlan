@@ -5,7 +5,7 @@
 import { TRIP, DAYS, CITIES, cityByKey, dayByDate, ROUTES, PASS, SOUVENIRS, TYPE_META, TIDE, allPois } from './data.js';
 import {
   el, clear, icon, $, $$, toast, pad2, ymd, parseHM, nowMinutes,
-  haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC, favs,
+  haversineKm, fmtDistance, gmapPlace, gmapDir, gmapHotels, bookingHotels, DOW_TC, favs, store,
 } from './util.js';
 import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.js';
 import { initMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
@@ -240,6 +240,126 @@ function renderCommandCard(s) {
   ]);
 }
 
+// ---------- Editable plan (persisted; AI- and hand-editable) ----------
+const PLAN_KEY = 'kp_plan';
+let BASE_ITEMS = null;      // pristine clone of original itinerary (for reset)
+let planCustomized = false;
+let editMode = false;
+
+function captureBase() { if (!BASE_ITEMS) BASE_ITEMS = DAYS.map(d => JSON.parse(JSON.stringify(d.items))); }
+function loadPlan() {
+  const saved = store.get(PLAN_KEY, null);
+  if (saved && saved.v === 1 && Array.isArray(saved.days) && saved.days.length === DAYS.length) {
+    DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...saved.days[i]));
+    planCustomized = true;
+  }
+}
+function savePlan() { store.set(PLAN_KEY, { v: 1, ts: Date.now(), days: DAYS.map(d => d.items) }); planCustomized = true; }
+function exportPlanObj() { return { v: 1, ts: Date.now(), title: TRIP.title, days: DAYS.map(d => ({ date: d.date, items: d.items })) }; }
+function importPlanObj(obj) {
+  if (!obj || obj.v !== 1 || !Array.isArray(obj.days) || obj.days.length !== DAYS.length) return false;
+  DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...(obj.days[i].items || obj.days[i])));
+  savePlan(); return true;
+}
+function clampDay(day) { const i = (parseInt(day, 10) || 0) - 1; return (i >= 0 && i < DAYS.length) ? i : -1; }
+function findItem(i, title) {
+  const items = DAYS[i].items, t = (title || '').trim();
+  let idx = items.findIndex(x => x.title === t);
+  if (idx < 0) idx = items.findIndex(x => x.title.includes(t) || (t && t.includes(x.title)));
+  return idx;
+}
+function sortDay(i) { DAYS[i].items.sort((a, b) => parseHM(a.time) - parseHM(b.time)); }
+function finishEdit(i) { sortDay(i); savePlan(); selectDay(i); if (currentTab !== 'plan') goTab('plan'); if (currentTab === 'today') renderToday(); }
+
+function planAdd({ day, time, title, type = 'see', desc = '', lat, lng }) {
+  const i = clampDay(day); if (i < 0) return { ok: false, msg: '天數需為 1–8' };
+  if (!time || !/^\d{1,2}:\d{2}$/.test(time)) return { ok: false, msg: '時間格式需為 HH:MM' };
+  if (!title) return { ok: false, msg: '缺少活動名稱' };
+  DAYS[i].items.push({ time, type, title, desc, ...(lat != null && lng != null ? { lat: +lat, lng: +lng } : {}), _user: true });
+  finishEdit(i); return { ok: true, msg: `已新增「${title}」到第 ${i + 1} 天 ${time}` };
+}
+function planRemove({ day, title }) {
+  const i = clampDay(day); if (i < 0) return { ok: false, msg: '天數需為 1–8' };
+  const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `第 ${i + 1} 天找不到「${title}」` };
+  const removed = DAYS[i].items.splice(idx, 1)[0];
+  finishEdit(i); return { ok: true, msg: `已刪除「${removed.title}」` };
+}
+function planUpdate({ day, title, newTime, newTitle, desc }) {
+  const i = clampDay(day); if (i < 0) return { ok: false, msg: '天數需為 1–8' };
+  const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `找不到「${title}」` };
+  const it = DAYS[i].items[idx];
+  if (newTime && /^\d{1,2}:\d{2}$/.test(newTime)) it.time = newTime;
+  if (newTitle) it.title = newTitle;
+  if (desc != null) it.desc = desc;
+  it._user = true; finishEdit(i); return { ok: true, msg: `已更新「${it.title}」` };
+}
+function planMove({ day, title, toDay, time }) {
+  const i = clampDay(day), j = clampDay(toDay); if (i < 0 || j < 0) return { ok: false, msg: '天數需為 1–8' };
+  const idx = findItem(i, title); if (idx < 0) return { ok: false, msg: `找不到「${title}」` };
+  const it = DAYS[i].items.splice(idx, 1)[0];
+  if (time && /^\d{1,2}:\d{2}$/.test(time)) it.time = time;
+  it._user = true; DAYS[j].items.push(it); sortDay(i);
+  finishEdit(j); return { ok: true, msg: `已將「${it.title}」移到第 ${j + 1} 天${time ? ' ' + time : ''}` };
+}
+function planReset() {
+  if (!BASE_ITEMS) return { ok: false, msg: '無原始行程' };
+  DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...JSON.parse(JSON.stringify(BASE_ITEMS[i]))));
+  try { localStorage.removeItem(PLAN_KEY); } catch {}
+  planCustomized = false;
+  selectDay(selectedDay); if (currentTab === 'today') renderToday();
+  return { ok: true, msg: '已還原為原始行程' };
+}
+
+// ---- Cloud sync (optional, Cloudflare KV) ----
+function getSyncCode() { let c = store.get('kp_synccode', null); if (!c) { c = Math.random().toString(36).slice(2, 8); store.set('kp_synccode', c); } return c; }
+async function cloudUpload() {
+  const c = getSyncCode();
+  try {
+    const res = await fetch('/api/plan?code=' + encodeURIComponent(c), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportPlanObj()) });
+    if (res.status === 501) return toast('雲端未設定：請先在 Cloudflare 綁定 KV');
+    if (!res.ok) return toast('上傳失敗（' + res.status + '）');
+    toast('已上傳雲端 · 分享碼 ' + c);
+  } catch (e) { toast('上傳失敗：' + e.message); }
+}
+async function cloudLoad(c) {
+  if (!c) return;
+  try {
+    const res = await fetch('/api/plan?code=' + encodeURIComponent(c));
+    if (res.status === 404) return toast('找不到此分享碼');
+    if (res.status === 501) return toast('雲端未設定：請先在 Cloudflare 綁定 KV');
+    if (!res.ok) return toast('載入失敗（' + res.status + '）');
+    const obj = await res.json();
+    if (importPlanObj(obj)) { store.set('kp_synccode', c); selectDay(selectedDay); if (currentTab === 'today') renderToday(); toast('已從雲端載入行程'); closeSheets(); }
+    else toast('資料格式不符');
+  } catch (e) { toast('載入失敗：' + e.message); }
+}
+
+// add/edit a single activity via a form sheet
+function openPlanForm(dayIdx, item) {
+  const isEdit = !!item;
+  $('#sheetTitle').textContent = isEdit ? '編輯活動' : '新增活動';
+  const body = clear($('#sheetBody'));
+  const mk = (label, node) => body.appendChild(el('.bk-field', {}, [el('label', { text: label }), node]));
+  const inputStyle = { width: '100%', padding: '11px 13px', borderRadius: '12px', border: '1px solid var(--line-strong)', background: 'var(--surface)', fontSize: '15px' };
+  const timeIn = el('input', { type: 'time', value: item ? item.time : '12:00', style: inputStyle });
+  const titleIn = el('input', { type: 'text', value: item ? item.title : '', placeholder: '例：金閣寺', style: inputStyle });
+  const typeSel = el('select', { style: inputStyle });
+  [['see', '景點'], ['eat', '美食'], ['shop', '購物'], ['move', '交通'], ['stay', '住宿']].forEach(([v, l]) => typeSel.appendChild(el('option', { value: v, ...(item && item.type === v ? { selected: 'selected' } : {}) }, l)));
+  const descIn = el('textarea', { rows: 3, placeholder: '備註（選填）', style: inputStyle }); descIn.value = item ? (item.desc || '') : '';
+  mk('時間', timeIn); mk('活動名稱', titleIn); mk('類型', typeSel); mk('備註', descIn);
+  body.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '6px' }, onclick: () => {
+    const time = timeIn.value, title = titleIn.value.trim();
+    if (!title) { toast('請輸入活動名稱'); return; }
+    const r = isEdit
+      ? planUpdate({ day: dayIdx + 1, title: item.title, newTime: time, newTitle: title, desc: descIn.value.trim() })
+      : planAdd({ day: dayIdx + 1, time, title, type: typeSel.value, desc: descIn.value.trim() });
+    if (item && isEdit && item.type !== typeSel.value) { const k = findItem(dayIdx, title); if (k >= 0) { DAYS[dayIdx].items[k].type = typeSel.value; savePlan(); selectDay(dayIdx); } }
+    closeSheets(); toast(r.msg);
+  } }, [isEdit ? '儲存' : '新增活動']));
+  if (isEdit) body.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px', color: 'var(--sakura)' }, onclick: () => { const r = planRemove({ day: dayIdx + 1, title: item.title }); closeSheets(); toast(r.msg); } }, ['刪除此活動']));
+  openSheet('sheet');
+}
+
 // ---------- Itinerary page ----------
 let curDayPts = [];
 function renderTideCard(date) {
@@ -289,6 +409,7 @@ function renderDayDetail(i) {
     el('.row.wrap', { style: { marginTop: '10px', gap: '8px' } }, [
       el('button.gmap-btn', { onclick: () => goWeather(d.weatherKey) }, [icon('i-weather'), '當地天氣']),
       el('button.gmap-btn', { onclick: () => { showOnMap(d.items.find(x => x.lat)?.title || c.name); } }, [icon('i-pin'), '地圖']),
+      el('button.gmap-btn', { style: editMode ? { borderColor: 'var(--brand-2)', color: 'var(--brand-2)' } : {}, onclick: () => { editMode = !editMode; renderDayDetail(i); } }, [icon('i-plan'), editMode ? '完成編輯' : '編輯行程']),
     ]),
   ]));
 
@@ -305,13 +426,15 @@ function renderDayDetail(i) {
 
   const tl = el('.timeline', { style: { marginTop: '14px' } });
   tl.appendChild(el('.tl-rail'));
-  d.items.forEach(it => tl.appendChild(renderItem(it, isToday && s.current === it)));
+  d.items.forEach(it => tl.appendChild(renderItem(it, isToday && s.current === it, i)));
   root.appendChild(tl);
 
-  root.appendChild(el('p', { class: 'tiny muted-3', style: { margin: '14px 4px 0' }, text: '※ 車次與時刻為參考值，實際請以各路線的 Google 班次/JR 官方即時資訊為準。' }));
+  if (editMode) root.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '4px' }, onclick: () => openPlanForm(i, null) }, ['＋ 新增活動到本日']));
+
+  root.appendChild(el('p', { class: 'tiny muted-3', style: { margin: '14px 4px 0' }, text: editMode ? '✏️ 編輯模式：可新增/編輯/刪除活動；改時間會自動重新排序。也可在「AI」分頁直接叫旅伴幫你調整。' : '※ 車次與時刻為參考值，實際請以各路線的 Google 班次/JR 官方即時資訊為準。' }));
 }
 
-function renderItem(it, isNow) {
+function renderItem(it, isNow, dayIdx) {
   const meta = TYPE_META[it.type] || TYPE_META.see;
   const mod = it.type === 'move' ? '.tl-item--move' : '';
   const body = [el('.tl-dot')];
@@ -326,6 +449,10 @@ function renderItem(it, isNow) {
   if (it.dur) foot.appendChild(el('span.tiny.muted-3', { text: '⏱ ' + it.dur }));
   if (it.lat) foot.appendChild(el('a.gmap-btn', { href: gmapPlace(it.title, it.lat, it.lng), target: '_blank', rel: 'noopener', style: { padding: '4px 10px', fontSize: '11px' }, onclick: e => e.stopPropagation() }, [icon('i-ext'), '導航']));
   if (it.lat) foot.appendChild(el('a.gmap-btn', { href: gmapHotels(it.lat, it.lng), target: '_blank', rel: 'noopener', style: { padding: '4px 10px', fontSize: '11px', borderColor: 'var(--sakura)', color: 'var(--sakura)' }, onclick: e => e.stopPropagation() }, ['🏨 附近飯店']));
+  if (editMode && dayIdx != null) {
+    foot.appendChild(el('button.gmap-btn', { style: { padding: '4px 10px', fontSize: '11px' }, onclick: e => { e.stopPropagation(); openPlanForm(dayIdx, it); } }, ['✎ 編輯']));
+    foot.appendChild(el('button.gmap-btn', { style: { padding: '4px 10px', fontSize: '11px', borderColor: 'var(--sakura)', color: 'var(--sakura)' }, onclick: e => { e.stopPropagation(); const r = planRemove({ day: dayIdx + 1, title: it.title }); toast(r.msg); } }, ['✕ 刪除']));
+  }
   card.appendChild(foot);
   body.push(el('.tl-body', {}, [card]));
   return el('.tl-item' + mod + (isNow ? '.tl-item--now' : ''), {}, [
@@ -598,6 +725,24 @@ function openSettings() {
   body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 12px' }, text: '授權定位後，「今日」分頁會依你目前位置顯示到下一站的距離與導航。' }));
   body.appendChild(el('button.btn.btn--block', { onclick: () => { requestLocation(false); }, }, [icon('i-loc'), lastPos ? '重新定位' : '允許定位']));
 
+  // Itinerary edit + cloud sync
+  body.appendChild(el('.divider'));
+  body.appendChild(el('.h-section', { text: '行程 · 編輯與同步' }));
+  body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 10px', lineHeight: '1.6' }, text: (planCustomized ? '你已自訂行程（自動存在本機）。' : '行程可手動或由 AI 調整，變更自動存在本機。') + ' 在「行程」分頁點「編輯行程」可增刪改；或到「AI」分頁叫旅伴幫你改。' }));
+  body.appendChild(el('button.btn.btn--block', { onclick: () => { const r = planReset(); toast(r.msg); closeSheets(); } }, ['↩︎ 還原原始行程']));
+  const syncCode = getSyncCode();
+  body.appendChild(el('p', { class: 'tiny muted-3', style: { margin: '14px 0 6px', lineHeight: '1.6' }, text: '雲端同步（選用，需在 Cloudflare 綁定 KV）：把行程存到雲端，換裝置或與同行者用同一組分享碼共用。' }));
+  body.appendChild(el('label', { class: 'tiny muted-3', text: '我的分享碼' }));
+  body.appendChild(el('input', { value: syncCode, readonly: 'readonly', style: inputStyle() }));
+  body.appendChild(el('.grid2', { style: { marginTop: '10px' } }, [
+    el('button.btn.btn--brand', { onclick: cloudUpload }, ['☁️ 上傳到雲端']),
+    el('button.btn', { onclick: () => cloudLoad(getSyncCode()) }, ['⬇️ 從雲端載入']),
+  ]));
+  body.appendChild(el('label', { class: 'tiny muted-3', style: { marginTop: '10px', display: 'block' }, text: '輸入同行者的分享碼載入其行程' }));
+  const friendIn = el('input', { type: 'text', placeholder: '例：ab12cd', style: inputStyle() });
+  body.appendChild(friendIn);
+  body.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => { const c = friendIn.value.trim(); if (c) cloudLoad(c); } }, ['載入此分享碼']));
+
   // About
   body.appendChild(el('.divider'));
   body.appendChild(el('.h-section', { text: '關於' }));
@@ -644,6 +789,8 @@ function hideSplash() {
 // ---------- Init ----------
 function init() {
   initTheme();
+  captureBase();
+  loadPlan();
 
   // tabs
   $$('.tab').forEach(t => t.addEventListener('click', () => goTab(t.dataset.tab)));
@@ -678,6 +825,7 @@ function init() {
   geminiCtl = initGemini({
     status, goTab, openDay, showOnMap, goWeather, goSouvenirs,
     openMaps: url => window.open(url, '_blank', 'noopener'),
+    planAdd, planRemove, planUpdate, planMove, planReset,
   });
 
   // toolkit (錦囊) + motion

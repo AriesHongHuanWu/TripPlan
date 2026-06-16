@@ -24,6 +24,8 @@
 - **行事曆匯出**：一鍵把 8 日行程匯出成 `.ics` 加入手機行事曆。
 - **當日地圖 + 潮汐**：每日行程附依序串連的小地圖；宮島當天顯示大鳥居潮汐（看浮鳥居/走到鳥居腳的時段）。
 - **日出日落**：天氣頁顯示各地日出/日落時間，方便安排。
+- **可編輯行程 + AI 幫你改**：在「行程」點「編輯行程」可手動新增/編輯/刪除活動（改時間自動重排）；或在「AI」開**代理模式**直接說「第 5 天太累，幫我把屋島拿掉」「把宮島改到上午」「把大阪城移到第 7 天」，AI 會即時調整行程。所有變更**自動存在本機**，可一鍵還原。
+- **雲端同步（選用 · Cloudflare KV）**：用分享碼把行程存到雲端，換裝置或與同行者用同一組碼共用（見下方設定）。
 
 ## 🧱 技術
 
@@ -61,6 +63,13 @@ npx wrangler pages secret put GEMINI_API_KEY --project-name=kyushu-plan
 Google API 中對應 Gemini 3 Flash 世代的字串為 `gemini-flash-latest`（永遠指向最新 Flash）或穩定版 `gemini-3.5-flash`。本專案預設 `gemini-flash-latest`，可用 `GEMINI_MODEL` 覆寫。
 
 > 不想動後台也能用：開啟 App → 右上「設定」→ 貼上你的 Gemini 金鑰，App 會改為瀏覽器直連（適合本機測試）。
+
+### 雲端同步（選用 · Cloudflare KV）
+行程編輯預設只存「本機」就能用；若要**跨裝置／與同行者共用**，再加 KV（免費額度足夠：每日 10 萬讀、1 千寫、1GB）：
+1. 建立 KV namespace：`npx wrangler kv namespace create PLAN`（或後台 Workers & Pages → KV → Create）。
+2. 綁定到 Pages：後台 → 你的 Pages 專案 → **Settings → Bindings → Add → KV namespace**，**Variable name 填 `PLAN`** → 選剛建立的 namespace → 存檔並重新部署。
+3. 完成後，App「設定 → 行程同步」的「上傳到雲端／從雲端載入」即可運作；把**分享碼**給同行者，他在設定輸入即可載入同一份行程。
+> 沒綁 KV 也不影響其他功能，只是雲端同步會提示「未設定」。`functions/api/plan.js` 已寫好（GET/PUT `/api/plan?code=...`）。
 
 ---
 
