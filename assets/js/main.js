@@ -858,7 +858,53 @@ function renderNotifySettings(body) {
   ]));
   body.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: () => Notify.testNotify() }, ['發送測試通知']));
 }
+// ---------- First-run onboarding (tutorial → add to home screen) ----------
+// Uses a fresh flag so EXISTING users also see it once from now.
+function maybeOnboard() {
+  if (store.get('kp_onboarded_v1', false)) return;
+  setTimeout(() => { if (!store.get('kp_onboarded_v1', false)) showOnboarding(); }, 550);
+}
+function finishOnboard(ov) { store.set('kp_onboarded_v1', true); if (ov) { ov.classList.remove('is-on'); setTimeout(() => { try { ov.remove(); } catch {} }, 260); } }
+function installNow() {
+  if (window.__bip) { try { window.__bip.prompt(); window.__bip.userChoice.then(r => { if (r && r.outcome === 'accepted') toast('已加入主畫面！'); window.__bip = null; }).catch(() => {}); return; } catch {} }
+  openInstallGuide();
+}
+function showOnboarding() {
+  const pw = pwaState();
+  const steps = [
+    { emoji: '🧭', title: '歡迎使用 Plan AI', body: '用 AI 規劃「任何國家」的旅程 — 說出目的地與日期，幾秒就幫你排好整趟行程。' },
+    { emoji: '✨', title: 'AI 幫你排、隨時調整', body: '在主頁或「旅伴」分頁打字，AI 會建立並調整行程；地圖、天氣、預算與 PDF 匯出都內建。' },
+    { emoji: '🤝', title: '和朋友一起規劃', body: '用「邀請朋友 → 共同編輯」即時共編同一份行程，還能在「同行聊天」用 @ai 一起規劃。' },
+    { emoji: '📲', title: '加入主畫面，像 App 一樣用', body: pw.standalone ? '你已經安裝好了，讚！直接開始規劃吧。' : '把 Plan AI 加到手機／電腦桌面：全螢幕、可離線、開啟更快。', install: !pw.standalone },
+  ];
+  let i = 0;
+  const card = el('.onb__card', {});
+  const ov = el('.onb', { onclick: e => { if (e.target === ov) finishOnboard(ov); } }, [card]);
+  const render = () => {
+    const s = steps[i], last = i === steps.length - 1;
+    clear(card);
+    card.appendChild(el('.onb__emoji', { text: s.emoji }));
+    card.appendChild(el('.onb__title', { text: s.title }));
+    card.appendChild(el('p', { class: 'onb__body', text: s.body }));
+    card.appendChild(el('.onb__dots', {}, steps.map((_, k) => el('span.onb__dot' + (k === i ? '.is-on' : ''), {}))));
+    const acts = el('.onb__actions', {});
+    if (!last) {
+      acts.appendChild(el('button.btn.btn--brand.btn--block', { onclick: () => { i++; render(); } }, ['下一步']));
+      acts.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => finishOnboard(ov) }, ['略過']));
+    } else if (s.install) {
+      acts.appendChild(el('button.btn.btn--brand.btn--block', { onclick: () => { finishOnboard(ov); installNow(); } }, [icon('i-install'), '加入主畫面']));
+      acts.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => finishOnboard(ov) }, ['稍後再說']));
+    } else {
+      acts.appendChild(el('button.btn.btn--brand.btn--block', { onclick: () => finishOnboard(ov) }, ['開始使用']));
+    }
+    card.appendChild(acts);
+  };
+  document.body.appendChild(ov); render();
+  requestAnimationFrame(() => ov.classList.add('is-on'));
+}
+
 function maybeNotifyIntro() {
+  if (!store.get('kp_onboarded_v1', false)) return;   // let onboarding go first
   if (Notify.asked() || !Notify.supported()) return;
   setTimeout(() => {
     if (Notify.asked()) return;
@@ -1006,6 +1052,7 @@ function showScreen(name) {
   if (name === 'home') renderHome();
   if (name === 'plans') renderPlans();
   if (name === 'app') maybeNotifyIntro();
+  if (name === 'plans' || name === 'app') maybeOnboard();   // first-run tutorial → add to home screen
   window.scrollTo({ top: 0 });
 }
 
