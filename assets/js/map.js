@@ -48,10 +48,11 @@ export function initMap(onWeather) {
   onWeatherCb = onWeather;
   ensureGesture();
 
+  // Standard interaction so the LEFT mouse button drags/pans the map, plus
+  // pinch-zoom on touch and wheel/trackpad-pinch zoom on desktop.
   map = L.map(elMap, {
-    zoomControl: true, attributionControl: true, touchZoom: true, doubleClickZoom: true, dragging: true, tap: true,
-    gestureHandling: true,   // 1 finger scrolls the page; 2 fingers pan/zoom (Ctrl+wheel on desktop)
-    gestureHandlingOptions: { text: { touch: '請用雙指移動地圖', scroll: '請用 Ctrl + 滾輪縮放地圖', scrollMac: '請用 ⌘ + 滾輪縮放地圖' }, duration: 1500 },
+    zoomControl: true, attributionControl: true,
+    dragging: true, scrollWheelZoom: true, touchZoom: true, doubleClickZoom: true, tap: true,
   }).setView([34.2, 133.0], 6);
   L.tileLayer(tileUrl(), {
     attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, subdomains: 'abcd',
