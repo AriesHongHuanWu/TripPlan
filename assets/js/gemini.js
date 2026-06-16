@@ -88,7 +88,7 @@ async function execTool(call) {
         const url = (a.origin && a.destination) ? gmapDir(a.origin, a.destination, a.mode || 'transit') : gmapPlace(a.query || a.destination || '');
         API.openMaps(url); return { label: '開啟 Google 導航', result: { url } };
       }
-      case 'show_souvenirs': { const key = resolveCity(a.city); API.goSouvenirs(key); return { label: `顯示 ${cityByKey[key].name} 伴手禮`, result: { ok: true } }; }
+      case 'show_souvenirs': { const key = resolveCity(a.city); API.goSouvenirs(key); const nm = (cityByKey[key] || {}).name || a.city || ''; return { label: `顯示 ${nm} 伴手禮`, result: { ok: true } }; }
       case 'find_hotels': {
         const p = allPois.find(p => p.name.includes(a.place) || a.place.includes(p.name) || (p.jp && p.jp.toLowerCase().includes(a.place.toLowerCase())));
         const url = p ? gmapHotels(p.lat, p.lng) : `https://www.google.com/maps/search/${encodeURIComponent(a.place + ' ホテル')}`;
@@ -112,19 +112,35 @@ async function execTool(call) {
 }
 
 // ---- API call ----
+// Model aliases drift; if the configured model 404s we transparently retry with
+// known-good fallbacks so a stale model id never breaks the whole AI.
+const MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+const modelMissing = (status, t) => status === 404 || /not\s*found|not\s*supported|unknown name|is not found|call ListModels/i.test(t || '');
 async function callGemini(payload) {
   const cfg = getCfg();
   if (cfg.key) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`;
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.key }, body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error('direct ' + res.status + ': ' + (await res.text()).slice(0, 200));
-    return res.json();
+    const models = [cfg.model, ...MODEL_FALLBACKS].filter((m, i, a) => m && a.indexOf(m) === i);
+    let lastErr = 'direct error';
+    for (const m of models) {
+      let res;
+      try {
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.key }, body: JSON.stringify(payload) });
+      } catch (e) { throw new Error('無法連線到 Gemini（網路或瀏覽器阻擋）：' + (e && e.message || e)); }
+      if (res.ok) return res.json();
+      const t = await res.text();
+      lastErr = 'direct ' + res.status + ': ' + t.slice(0, 220);
+      if (!modelMissing(res.status, t)) break;   // a real key/permission/quota error — stop, don't mask it
+    }
+    throw new Error(lastErr);
   }
-  const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  let res;
+  try { res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
+  catch (e) { throw new Error('無法連線到伺服器：' + (e && e.message || e)); }
   if (!res.ok) {
     const t = await res.text();
-    if (res.status === 503 || /GEMINI_API_KEY/i.test(t)) throw new Error('NO_KEY');
-    throw new Error('proxy ' + res.status + ': ' + t.slice(0, 200));
+    if (res.status === 503 || res.status === 404 || /GEMINI_API_KEY/i.test(t)) throw new Error('NO_KEY');
+    throw new Error('proxy ' + res.status + ': ' + t.slice(0, 220));
   }
   return res.json();
 }

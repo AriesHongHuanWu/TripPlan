@@ -287,11 +287,12 @@ function legacyToModel(st) {
 function exportAll() { return { v: 3, ts: Date.now(), title: TRIP.title, model: cloneModel(currentModel()), extras: readExtras() }; }
 // Resolve a plan's stored model WITHOUT disturbing the live trip (for export/share).
 function planModelFor(id) {
-  if (id === currentPlanId) snapshotCurrent();
+  if (id === currentPlanId) { snapshotCurrent(); return cloneModel(currentModel()); }
   const st = store.get('kp_state:' + id, null);
   if (st && st.v === 3 && st.model) return st.model;
   if (st && st.v === 2) return legacyToModel(st);
-  return cloneModel(currentModel());
+  const base = store.get('kp_base:' + id, null);   // never fall back to the *active* plan's data
+  return (base && base.model) ? base.model : kyushuModel();
 }
 function clampDay(day) { const i = (parseInt(day, 10) || 0) - 1; return (i >= 0 && i < DAYS.length) ? i : -1; }
 function findItem(i, title) {
@@ -683,10 +684,10 @@ function closeSheets() { $('#scrim').classList.remove('is-open'); ['#sheet', '#s
 let searchIndex = null;
 function buildSearchIndex() {
   const idx = [];
-  allPois.forEach(p => idx.push({ kw: (p.name + ' ' + (p.jp || '') + ' ' + p.cityName).toLowerCase(), label: p.name, sub: p.cityName + (p.jp ? ' · ' + p.jp : ''), emoji: p.emoji || '📍', run: () => { closeSheets(); showOnMap(p.name); } }));
-  DAYS.forEach((d, i) => idx.push({ kw: (d.title + ' ' + d.date + ' ' + cityByKey[d.cityKey].name).toLowerCase(), label: `Day ${i + 1} · ${d.title}`, sub: `${d.date}（週${d.dow}）`, emoji: '🗓️', run: () => { closeSheets(); openDay(i + 1); } }));
+  allPois.forEach(p => idx.push({ kw: (p.name + ' ' + (p.jp || '') + ' ' + (p.cityName || '')).toLowerCase(), label: p.name, sub: (p.cityName || '') + (p.jp ? ' · ' + p.jp : ''), emoji: p.emoji || '📍', run: () => { closeSheets(); showOnMap(p.name); } }));
+  DAYS.forEach((d, i) => idx.push({ kw: (d.title + ' ' + d.date + ' ' + ((cityByKey[d.cityKey] || {}).name || '')).toLowerCase(), label: `Day ${i + 1} · ${d.title}`, sub: `${d.date}（週${d.dow}）`, emoji: '🗓️', run: () => { closeSheets(); openDay(i + 1); } }));
   ROUTES.forEach(r => idx.push({ kw: (r.from + ' ' + r.to + ' ' + (r.line || '')).toLowerCase(), label: `${r.from} → ${r.to}`, sub: r.line || '交通', emoji: '🚆', run: () => { closeSheets(); goTab('route'); setRouteSeg('trips'); } }));
-  Object.keys(SOUVENIRS).forEach(k => idx.push({ kw: ('伴手禮 omiyage ' + cityByKey[k].name).toLowerCase(), label: `${cityByKey[k].name} 伴手禮`, sub: '必買清單', emoji: '🎁', run: () => { closeSheets(); goSouvenirs(k); } }));
+  Object.keys(SOUVENIRS).forEach(k => { const c = cityByKey[k] || { name: k }; idx.push({ kw: ('伴手禮 omiyage ' + c.name).toLowerCase(), label: `${c.name} 伴手禮`, sub: '必買清單', emoji: '🎁', run: () => { closeSheets(); goSouvenirs(k); } }); });
   return idx;
 }
 function openSearch() {
@@ -1020,6 +1021,7 @@ function createPlan({ title, model = null, fromState = null, base = null, emoji 
 }
 // Re-render every trip-dependent surface for the active plan (any country).
 function renderActivePlan() {
+  searchIndex = null;   // drop stale global-search cache so it rebuilds for the new plan
   const todayEntry = dayByDate[ymd(new Date())]; selectedDay = todayEntry ? todayEntry.index : 0;
   if (CITIES[0] && CITIES[0].key) wxCity = CITIES[0].key;
   renderToday(); renderDayPicker(); renderDayDetail(selectedDay);
@@ -1093,7 +1095,7 @@ function normalizeModel(res) {
     souvenirs: {}, tide: null,
     budget: (res.budget && res.budget.fixed) ? res.budget : { fixed: [], mealsPerDay: (res.budget && res.budget.mealsPerDay) || 1500, hotelPerNight: (res.budget && res.budget.hotelPerNight) || 4000, nights: Math.max(0, days.length - 1) },
     currency: (trip.currency && trip.currency.symbol) ? trip.currency : { symbol: '', rate: 1, note: '' },
-    emergency: (res.emergency && res.emergency.numbers) ? res.emergency : { numbers: [], offices: [] },
+    emergency: { numbers: [], offices: [], ...(res.emergency || {}) },
     packing: res.packing || [],
   };
 }
@@ -1478,7 +1480,7 @@ function ensurePlans() {
 }
 function allCloudData() {
   const o = {};
-  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('kp_') && k !== 'kp_gemini_key' && k !== 'kp_theme' && k !== 'kp_synccode') o[k] = localStorage.getItem(k); }
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('kp_') && k !== 'kp_gemini_key' && k !== 'kp_theme' && k !== 'kp_synccode' && !k.startsWith('kp_base:')) o[k] = localStorage.getItem(k); }
   return o;
 }
 // Flattened current-plan schedule the Cron Worker reads to send reminders

@@ -52,7 +52,7 @@ function renderHome() {
       el('.tk-tile__d', { text: tl.d }),
     ])
   )));
-  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '14px' }, onclick: exportICS }, ['📅 匯出 8 日行程到行事曆 (.ics)']));
+  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '14px' }, onclick: exportICS }, [`📅 匯出 ${DAYS.length} 日行程到行事曆 (.ics)`]));
 }
 
 function icsEsc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
@@ -109,21 +109,21 @@ function renderEmergency() {
   setTitle('緊急求助');
   const b = clear(body()); b.appendChild(backBar());
   const card = el('.emg', {}, [el('div', { style: { fontWeight: '800', fontSize: '15px', marginBottom: '4px' }, text: '🆘 緊急電話（全日本共通）' })]);
-  EMERGENCY.numbers.forEach(n => card.appendChild(el('.emg-row', {}, [
-    el('div', {}, [el('div', { style: { fontWeight: '700' }, text: `${n.emoji} ${n.num}` }), el('div', { style: { fontSize: '11.5px', opacity: '.9' }, text: n.label })]),
-    el('a.emg-call', { href: `tel:${n.num.replace(/[^0-9]/g, '')}` }, '撥打'),
+  (EMERGENCY.numbers || []).forEach(n => card.appendChild(el('.emg-row', {}, [
+    el('div', {}, [el('div', { style: { fontWeight: '700' }, text: `${n.emoji || '📞'} ${n.num}` }), el('div', { style: { fontSize: '11.5px', opacity: '.9' }, text: n.label })]),
+    el('a.emg-call', { href: `tel:${String(n.num).replace(/[^0-9]/g, '')}` }, '撥打'),
   ])));
   b.appendChild(card);
 
-  b.appendChild(el('.info-card', {}, [
+  if (EMERGENCY.taiwanLine) b.appendChild(el('.info-card', {}, [
     el('div', { style: { fontWeight: '700', marginBottom: '6px' }, text: '🇹🇼 ' + EMERGENCY.taiwanLine.label }),
     el('.row.wrap', { style: { gap: '8px' } }, [
-      el('a.chip.chip--brand', { href: `tel:${EMERGENCY.taiwanLine.intl.replace(/[^0-9+]/g, '')}` }, [icon('i-phone'), EMERGENCY.taiwanLine.intl]),
+      el('a.chip.chip--brand', { href: `tel:${String(EMERGENCY.taiwanLine.intl || '').replace(/[^0-9+]/g, '')}` }, [icon('i-phone'), EMERGENCY.taiwanLine.intl]),
     ]),
     el('p', { class: 'tiny muted', style: { marginTop: '8px', lineHeight: '1.6' }, text: EMERGENCY.taiwanLine.note }),
   ]));
 
-  EMERGENCY.offices.forEach(o => b.appendChild(el('.info-card', {}, [
+  (EMERGENCY.offices || []).forEach(o => b.appendChild(el('.info-card', {}, [
     el('div', { style: { fontWeight: '700' }, text: o.name }),
     el('.tiny.muted', { style: { margin: '3px 0 8px' }, text: o.area }),
     el('.tiny', { style: { color: 'var(--text-2)' }, text: '📍 ' + o.addr }),
@@ -134,7 +134,7 @@ function renderEmergency() {
     ]),
   ])));
 
-  b.appendChild(el('.info-card', {}, [
+  if (EMERGENCY.steps && EMERGENCY.steps.length) b.appendChild(el('.info-card', {}, [
     el('div', { style: { fontWeight: '700', marginBottom: '6px' }, text: '📝 遺失護照／證件處理' }),
     el('.stack', { style: { gap: '6px' } }, EMERGENCY.steps.map(s => el('.tiny', { style: { color: 'var(--text-2)', lineHeight: '1.55' }, text: '• ' + s }))),
   ]));
@@ -187,7 +187,7 @@ function renderBudget() {
     const rows = [
       ...BUDGET.fixed.map(f => [f.label, f.amount]),
       ['門票（行程內景點合計）', adm],
-      [`餐食（${cfg.meals.toLocaleString()}/日 × 8）`, cfg.meals * 8],
+      [`餐食（${cfg.meals.toLocaleString()}/日 × ${DAYS.length}）`, cfg.meals * DAYS.length],
       [`住宿（${cfg.hotel.toLocaleString()}/晚 × ${BUDGET.nights}）`, cfg.hotel * BUDGET.nights],
       ['其他（購物/雜支）', cfg.other],
     ];
