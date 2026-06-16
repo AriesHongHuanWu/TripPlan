@@ -43,18 +43,38 @@ export async function requestEnable() {
 export function disable() { const c = cfg(); c.enabled = false; setCfg(c); clearTimers(); }
 export function setType(k, v) { const c = cfg(); c.types[k] = v; setCfg(c); scheduleReminders(); }
 
+// Actually display a notification. Uses an ACTIVE service worker if one exists
+// (getRegistration resolves immediately, unlike `.ready` which can hang forever
+// when no SW is active), else falls back to a page Notification (fine on desktop).
+async function fire(title, body, tag, data) {
+  const opts = { body: body || '', icon: 'assets/icons/icon-192.png', badge: 'assets/icons/icon-192.png', tag: tag || 'kp', data: data || {} };
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && reg.active) { await reg.showNotification(title, opts); return true; }
+    }
+  } catch {}
+  try { new Notification(title, { body: opts.body, icon: opts.icon, tag: opts.tag }); return true; }
+  catch (e) { return false; }
+}
 export function notify(type, title, body, data) {
   const c = cfg();
   if (!c.enabled || !c.types[type] || permission() !== 'granted') return;
-  try {
-    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-      navigator.serviceWorker.ready
-        .then(reg => reg.showNotification(title, { body: body || '', icon: 'assets/icons/icon-192.png', badge: 'assets/icons/icon-192.png', tag: type, data: data || {} }))
-        .catch(() => { try { new Notification(title, { body }); } catch {} });
-    } else { new Notification(title, { body }); }
-  } catch {}
+  fire(title, body, type, data);
 }
 export function notifyAI(title, body) { notify('ai', title || 'AI 已完成', body || ''); }
+
+// Robust, self-diagnosing TEST notification (for the Settings button). Requests
+// permission if needed and gives clear feedback instead of failing silently.
+export async function testNotify() {
+  if (!supported()) { toast('此瀏覽器不支援通知'); return; }
+  let p = permission();
+  if (p === 'default') { try { p = await Notification.requestPermission(); } catch {} }
+  if (p === 'denied') { toast('通知被瀏覽器封鎖：點網址列左側鎖頭 → 通知 → 允許'); return; }
+  if (p !== 'granted') { toast('尚未允許通知'); return; }
+  const ok = await fire('🔔 測試通知', '通知運作正常！若沒看到，請檢查系統（Windows/macOS）的通知設定與勿擾模式。', 'test');
+  toast(ok ? '已送出測試通知（沒看到請查系統通知設定）' : '無法顯示通知，請查瀏覽器/系統通知設定');
+}
 
 // Schedule today's itinerary reminders (fires while the app/PWA is open).
 export function scheduleReminders() {

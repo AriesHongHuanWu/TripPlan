@@ -829,7 +829,7 @@ function renderNotifySettings(body) {
     el('div', {}, [el('b', { text: '伺服器推播（App 關閉時）：' }), el('span', { text: pushTxt })]),
     el('.tiny.muted-3', { style: { marginTop: '4px' }, text: '行程提醒在 App／PWA 開著時即可運作，不需登入。App 完全關閉時的推播需登入並完成雲端設定。' }),
   ]));
-  body.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: () => { if (!on) { toast('請先啟用通知'); return; } Notify.notify('reminder', '🔔 測試通知', '通知運作正常！'); } }, ['發送測試通知']));
+  body.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: () => Notify.testNotify() }, ['發送測試通知']));
 }
 function maybeNotifyIntro() {
   if (Notify.asked() || !Notify.supported()) return;
