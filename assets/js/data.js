@@ -8,6 +8,7 @@
 export let TRIP = {
   title: '九州 · 瀨戶內 · 關西',
   subtitle: 'JR 單程自由行 8 日',
+  country: '日本',
   start: '2026-06-17',
   end: '2026-06-24',
   days: 8,

@@ -48,9 +48,11 @@ service cloud.firestore {
       // A read-capable member may update only their own presence (members/ts).
       function onlyPresenceChanged() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'ts']); }
       // Editors may change the itinerary but never the access map or owner.
+      // .get(key, default) tolerates legacy docs that predate the `access` field.
       function accessUnchanged() {
-        return request.resource.data.access == resource.data.access
-            && request.resource.data.owner  == resource.data.owner;
+        return request.resource.data.get('access', {}) == resource.data.get('access', {})
+            && request.resource.data.get('owner', '')  == resource.data.get('owner', '')
+            && request.resource.data.get('visibility', '') == resource.data.get('visibility', '');   // owner-only field
       }
 
       allow get, list: if canRead();
@@ -77,6 +79,48 @@ service cloud.firestore {
         allow read:          if pCanRead();
         allow create:        if pCanComment();
         allow update, delete: if false;   // messages are immutable
+      }
+    }
+
+    // ---- community feed: public mirror (safe metadata only; the model lives in collab/) ----
+    match /feed/{code} {
+      // Only the owner of the matching collab/{code} may write metadata (verified via get()).
+      function collabOwner() { return get(/databases/$(database)/documents/collab/$(code)).data.owner; }
+      function isFeedOwner() { return signedIn() && request.auth.uid == collabOwner(); }
+      function likeCountSane() { return request.resource.data.get('likeCount', 0) is int && request.resource.data.get('likeCount', 0) >= 0; }
+      function likeDelta() { return request.resource.data.get('likeCount', 0) - resource.data.get('likeCount', 0); }
+      // A like/unlike must move likeCount in LOCK-STEP with the caller's own like marker, written in
+      // the SAME transaction (feedLikeToggle). existsAfter() sees the marker's post-commit state, so
+      // the counter cannot be inflated/deflated without a matching one-per-uid like doc transition.
+      function genuineLike() {
+        return likeDelta() == 1
+            && !exists(/databases/$(database)/documents/feed/$(code)/likes/$(request.auth.uid))
+            && existsAfter(/databases/$(database)/documents/feed/$(code)/likes/$(request.auth.uid));
+      }
+      function genuineUnlike() {
+        return likeDelta() == -1
+            && exists(/databases/$(database)/documents/feed/$(code)/likes/$(request.auth.uid))
+            && !existsAfter(/databases/$(database)/documents/feed/$(code)/likes/$(request.auth.uid));
+      }
+      function likeUpdate() {
+        return signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount', 'updatedAt'])
+            && likeCountSane()                              // never negative
+            && (genuineLike() || genuineUnlike());
+      }
+
+      allow get, list: if true;                                  // public discovery + fork
+      allow create:    if isFeedOwner() && likeCountSane();
+      // Like branch FIRST so a normal like never needs get(collab) (and still works if collab is private).
+      allow update:    if likeUpdate() || (isFeedOwner() && likeCountSane());
+      // Self-authorizing via the feed doc's own owner field, so delisting still works after collab is gone.
+      allow delete:    if signedIn() && request.auth.uid == resource.data.get('owner', '');
+
+      // one-per-user like marker (doc id == uid ⇒ uniqueness for free)
+      match /likes/{uid} {
+        allow get, list:     if true;                            // counts/state are public
+        allow create, delete: if signedIn() && request.auth.uid == uid;
+        allow update:        if false;                           // likes are immutable
       }
     }
   }

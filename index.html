@@ -96,20 +96,47 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
 
 <!-- ===== Screen: Cover / Home (3D landing + login) ===== -->
 <section id="screen-home" class="screen" hidden>
-  <div class="cover">
-    <div class="cover__space" aria-hidden="true"><span class="orb orb--a"></span><span class="orb orb--b"></span><span class="orb orb--c"></span></div>
+  <div class="gl" id="gl-top">
 
-    <header class="cover__nav">
-      <div class="cover__brand"><span class="cover__logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><path d="M12 6.7l1.05 2.25 2.25 1.05-2.25 1.05L12 13.3l-1.05-2.25-2.25-1.05 2.25-1.05z" fill="#fff" stroke="none"/></svg></span>Plan AI</div>
-      <div class="row" style="gap:8px"><button class="btn btn--sm" id="coverLoginTop">登入</button><button class="btn btn--brand btn--sm" id="coverStartTop">免費開始</button></div>
+    <!-- ===== Top nav ===== -->
+    <header class="gl-nav" id="glNav">
+      <div class="gl-nav__in">
+        <a class="gl-brand" data-scroll="#gl-top"><span class="gl-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><path d="M12 6.7l1.05 2.25 2.25 1.05-2.25 1.05L12 13.3l-1.05-2.25-2.25-1.05 2.25-1.05z" fill="#fff" stroke="none"/></svg></span>Plan AI</a>
+        <nav class="gl-nav__links">
+          <a data-scroll="#gl-features">功能</a>
+          <a data-scroll="#gl-showcase">展示</a>
+          <a data-scroll="#gl-how">教學</a>
+          <a data-scroll="#gl-compare">比較</a>
+          <a data-scroll="#gl-faq">常見問題</a>
+        </nav>
+        <span class="gl-nav__spacer"></span>
+        <div class="gl-nav__actions">
+          <button class="gl-iconbtn" id="glTheme" title="淺色 / 深色 / 自動" aria-label="切換主題"></button>
+          <button class="gl-btn gl-btn--sm gl-btn--ghost gl-hide-sm" id="coverLoginTop">登入</button>
+          <button class="gl-btn gl-btn--sm gl-btn--primary" id="coverStartTop">免費開始</button>
+          <button class="gl-iconbtn gl-menu-btn" id="glMenuBtn" aria-label="選單"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        </div>
+      </div>
     </header>
+    <div class="gl-mobile" id="glMobile">
+      <a data-scroll="#gl-features">功能</a>
+      <a data-scroll="#gl-showcase">展示</a>
+      <a data-scroll="#gl-how">教學</a>
+      <a data-scroll="#gl-compare">比較</a>
+      <a data-scroll="#gl-faq">常見問題</a>
+      <a data-legal="privacy">隱私權政策</a>
+      <button class="gl-btn gl-btn--primary" id="glMobileStart">免費開始規劃</button>
+    </div>
 
-    <section class="cover__hero">
-      <div class="cover__hero-txt reveal">
-        <div class="cover__eyebrow">✨ AI TRIP PLANNER · 任何國家</div>
-        <h1 class="cover__h1">一句話，<span class="grad">AI 幫你排好</span>整趟旅程</h1>
-        <p class="cover__lead">說出目的地與日期，Plan AI 幾秒生成完整逐日行程 — 地圖、天氣、預算、PDF 匯出，還能和朋友即時共編。</p>
-        <div class="ai-create" id="homeAiCreate" style="text-align:left">
+    <!-- ===== Hero ===== -->
+    <section class="gl-hero">
+      <div class="gl-hero__bg" aria-hidden="true"></div>
+      <div class="gl-wrap gl-hero__in reveal">
+        <span class="gl-eyebrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg>AI 智慧旅程規劃 · 支援全球任何國家</span>
+        <h1 class="gl-h1">一句話，<span class="g-grad">AI 幫你排好</span>整趟旅程</h1>
+        <p class="gl-lead">說出目的地與日期，Plan AI 幾秒生成完整逐日行程 — 地圖、天氣、預算與旅遊錦囊一應俱全，還能匯出高品質 PDF、和朋友即時共編。</p>
+
+        <div class="ai-create" id="homeAiCreate">
           <div class="ai-create__head"><span class="ai-create__spark"><svg class="ic"><use href="#i-ai"/></svg></span><b>用 AI 規劃一趟旅程</b></div>
           <div class="ai-create__field">
             <textarea id="homeAiInput" rows="1" placeholder="想去哪、玩幾天？例如：5 天東京自由行，7/10 出發"></textarea>
@@ -117,113 +144,298 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
           </div>
           <div class="ai-create__chips" id="homeAiChips"></div>
         </div>
-        <div class="cover__cta-row">
-          <button class="btn btn--brand" id="coverWizard">✨ AI 一鍵建立</button>
-          <button class="btn" id="guestEnter">免費開始</button>
-          <button class="btn btn-google" id="googleSignIn"><svg class="gicon" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>Google 登入</button>
+
+        <div class="gl-hero__cta">
+          <button class="gl-btn gl-btn--primary gl-btn--lg" id="coverWizard">✨ AI 一鍵建立</button>
+          <button class="gl-btn gl-btn--lg" id="guestEnter">免費開始</button>
+          <button class="gl-btn gl-btn--lg gl-btn-google" id="googleSignIn"><svg class="gicon" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>使用 Google 登入</button>
         </div>
-        <p class="tiny muted-3" id="homeNote" style="margin-top:12px"></p>
-      </div>
-      <div class="cover__hero-phone reveal">
-        <div class="p3d p3d--float">
-          <span class="p3d__island"></span>
-          <div class="p3d__scr">
-            <div class="p3d__glare" aria-hidden="true"></div>
-            <div class="mk">
-              <div class="mk__bar"><b>東京 · 5 天</b><span>6/17–21</span></div>
-              <div class="mk__chip">✨ AI 已排好行程</div>
-              <div class="mk__row"><i>09:00</i><span>淺草寺・雷門</span></div>
-              <div class="mk__row"><i>12:30</i><span>築地市場午餐</span></div>
-              <div class="mk__row"><i>15:00</i><span>澀谷 SKY 展望台</span></div>
-              <div class="mk__wx">☀️ 27° · 降雨 10% · 濕度 55%</div>
+        <div class="gl-hero__note">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>完全免費</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>免註冊・免信用卡</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>免安裝・可離線</span>
+        </div>
+        <p class="tiny muted-3" id="homeNote" style="margin-top:10px"></p>
+
+        <!-- product shot -->
+        <div class="gl-shot reveal">
+          <div class="gl-shot__bar"><i></i><i></i><i></i><span class="gl-shot__url">plan-ai.app · 京都 5 天</span></div>
+          <div class="gl-shot__body">
+            <div class="mock">
+              <div class="mock__bar"><b>京都 · 5 天</b><span>6/17 – 6/21</span></div>
+              <div class="mock__chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg>AI 已排好整趟行程</div>
+              <div class="mock__row is-ai"><i>09:00</i><span>清水寺・二年坂散步</span></div>
+              <div class="mock__row"><i>12:30</i><span>錦市場・在地午餐</span></div>
+              <div class="mock__row"><i>15:00</i><span>伏見稻荷大社・千本鳥居</span></div>
+              <div class="mock__row"><i>18:30</i><span>祇園・花見小路晚餐</span></div>
+              <div class="mock__note">☀️ 26° · 降雨 10% · 建議薄外套　·　預算 ¥8,400 / 日</div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ===== Scroll-pinned phone story ===== -->
-    <section class="story" id="coverStory" aria-label="功能介紹">
-      <div class="story__track">
-        <div class="story__stage">
-          <div class="story__rail">
-            <div class="story__caps">
-              <article class="story__cap is-active" data-i="0">
-                <div class="cover__kicker">✨ AI 規劃</div>
-                <h2>從零，一鍵生成</h2>
-                <p>輸入「5 天京都美食」，AI 立刻產出逐日行程、景點座標與交通；缺日期、機場或機票時會先問你，再精準排好。</p>
-              </article>
-              <article class="story__cap" data-i="1">
-                <div class="cover__kicker">🗓️ 逐日行程</div>
-                <h2>清楚的時間軸，隨手微調</h2>
-                <p>每天的時間軸一目了然，拖一拖、改個時間，或一句話請 AI 幫你重排；還能匯出高品質 PDF 與行事曆。</p>
-              </article>
-              <article class="story__cap" data-i="2">
-                <div class="cover__kicker">🗺️ 地圖・天氣</div>
-                <h2>世界任何角落，都看得見</h2>
-                <p>互動地圖自動聚焦你的城市、用線把每天串起來；各地即時天氣與穿搭建議，出門前一眼掌握。</p>
-              </article>
-              <article class="story__cap" data-i="3">
-                <div class="cover__kicker">🤝 一起規劃</div>
-                <h2>和朋友即時共編</h2>
-                <p>邀請朋友加入同一份行程，一起編輯、即時同步；在「同行聊天」用 @ai 一句話，AI 就幫大家排好。</p>
-              </article>
-            </div>
-            <div class="story__dots" id="storyDots" aria-hidden="true"></div>
+    <!-- ===== Trust / powered by ===== -->
+    <div class="gl-trust reveal">
+      <div class="gl-wrap">
+        <p class="gl-trust__label">技術支援</p>
+        <div class="gl-trust__row">
+          <span>先進 AI 引擎</span><span>Cloudflare</span><span>OpenStreetMap</span><span>Open-Meteo</span><span>Firebase</span><span>PWA 漸進式網頁</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Features ===== -->
+    <section class="gl-section" id="gl-features">
+      <div class="gl-wrap">
+        <div class="gl-head gl-center reveal">
+          <span class="gl-eyebrow">功能總覽</span>
+          <h2 class="gl-h2">規劃一趟旅程，需要的全在這</h2>
+          <p class="gl-lead">從生成、編輯、導航到出發，一個 App 全部搞定 — 而且完全免費。</p>
+        </div>
+        <div class="gl-grid reveal">
+          <div class="gl-card"><div class="gl-card__ic ic-indigo"><svg><use href="#i-ai"/></svg></div><h3>AI 一鍵生成</h3><p>輸入「5 天京都美食」，幾秒產出完整逐日行程、景點座標與交通安排。</p></div>
+          <div class="gl-card"><div class="gl-card__ic ic-blue"><svg><use href="#i-plan"/></svg></div><h3>逐日時間軸</h3><p>清楚的每日時間軸，拖一拖、改個時間，或一句話請 AI 幫你重排。</p></div>
+          <div class="gl-card"><div class="gl-card__ic ic-green"><svg><use href="#i-route"/></svg></div><h3>地圖 + 路線</h3><p>互動地圖自動聚焦城市、把每天景點連成路線，並深連 Google Maps 導航。</p></div>
+          <div class="gl-card"><div class="gl-card__ic ic-yellow"><svg><use href="#i-weather"/></svg></div><h3>天氣 + 穿搭</h3><p>各地即時天氣、降雨與日出日落，附上當天的穿搭建議。</p></div>
+          <div class="gl-card"><div class="gl-card__ic ic-teal"><svg><use href="#i-yen"/></svg></div><h3>預算 + 記帳</h3><p>自動估算旅費、即時匯率換算，旅途中還能分類記帳。</p></div>
+          <div class="gl-card"><div class="gl-card__ic ic-red"><svg><use href="#i-install"/></svg></div><h3>PDF / 行事曆匯出</h3><p>一鍵匯出高品質 PDF 計畫表，或加進 Google / Apple 行事曆（.ics）。</p></div>
+          <div class="gl-card"><div class="gl-card__ic ic-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16.5 5.2a3 3 0 0 1 0 5.6M21.5 20a6.5 6.5 0 0 0-4.5-6.2"/></svg></div><h3>即時共同編輯</h3><p>邀請朋友加入同一份行程，即時同步，還能在群組裡 @ai 一起調整。</p></div>
+          <div class="gl-card"><div class="gl-card__ic ic-blue"><svg><use href="#i-ticket"/></svg></div><h3>旅遊錦囊</h3><p>實用日語、緊急聯絡、打包清單、票券與禮儀 — 出國前的細節都備好。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Showcase (alternating) ===== -->
+    <section class="gl-section" id="gl-showcase" style="padding-top:0">
+      <div class="gl-wrap">
+        <div class="gl-head gl-center reveal">
+          <span class="gl-eyebrow">實際展示</span>
+          <h2 class="gl-h2">看看它怎麼運作</h2>
+        </div>
+
+        <div class="gl-show reveal">
+          <div class="gl-show__txt">
+            <span class="gl-eyebrow">AI 規劃</span>
+            <h3>從一句話，到完整行程</h3>
+            <p>只要描述目的地、天數與喜好，AI 立刻生成逐日安排。缺日期、機場或機票時，它會先問你再精準排好。</p>
+            <ul class="gl-show__list">
+              <li><svg><use href="#i-check"/></svg>支援全球任何國家與城市</li>
+              <li><svg><use href="#i-check"/></svg>自動帶入景點座標、開放時間與交通</li>
+              <li><svg><use href="#i-check"/></svg>隨時用聊天繼續微調</li>
+            </ul>
           </div>
+          <div class="gl-show__media">
+            <div class="mock">
+              <div class="mock__bar"><b>AI 旅伴</b><span>規劃模式</span></div>
+              <div class="mock__bub mock__bub--me">幫我排 5 天京都，多點美食</div>
+              <div class="mock__chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg>正在規劃「京都 5 天」</div>
+              <div class="mock__bub">已排好 5 天！含錦市場、伏見稻荷、嵐山與 12 間在地名店，並避開週一休館。</div>
+            </div>
+          </div>
+        </div>
 
-          <div class="story__phone">
-            <div class="p3d p3d--story" id="storyPhone">
-              <span class="p3d__island"></span>
-              <div class="p3d__scr">
-                <div class="p3d__glare" aria-hidden="true"></div>
+        <div class="gl-show gl-show--rev reveal">
+          <div class="gl-show__txt">
+            <span class="gl-eyebrow">行程 · 地圖</span>
+            <h3>清楚的時間軸，地圖一眼看懂</h3>
+            <p>每天的時間軸一目了然，手動拖拉或叫 AI 重排都行；互動地圖把每天的景點連成路線，到哪都不迷路。</p>
+            <ul class="gl-show__list">
+              <li><svg><use href="#i-check"/></svg>拖拉排序、即時編輯</li>
+              <li><svg><use href="#i-check"/></svg>每日路線自動連線</li>
+              <li><svg><use href="#i-check"/></svg>一鍵 Google Maps 導航</li>
+            </ul>
+          </div>
+          <div class="gl-show__media">
+            <div class="mock--map">
+              <span class="pin" style="left:24%;top:32%">🗼</span>
+              <span class="pin" style="left:62%;top:48%">⛩️</span>
+              <span class="pin" style="left:44%;top:72%">🏯</span>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M24 32 L62 48 L44 72" fill="none" stroke="var(--brand-2)" stroke-width="1.4" stroke-dasharray="3 3"/></svg>
+              <div class="tag">第 2 天 · 3 個景點 · 自動連線路線</div>
+            </div>
+          </div>
+        </div>
 
-                <div class="mk story__slide" data-i="0" style="--o:1">
-                  <div class="mk__bar"><b>AI 旅伴</b><span>代理模式</span></div>
-                  <div class="mk__bub mk__bub--me">幫我排 5 天京都，多點美食</div>
-                  <div class="mk__act">✨ 規劃「京都 5 天」</div>
-                  <div class="mk__bub">已排好 5 天！含錦市場、伏見稻荷、嵐山與 12 間在地名店 🍵</div>
-                </div>
-
-                <div class="mk story__slide" data-i="1">
-                  <div class="mk__bar"><b>行程</b><span>8 天</span></div>
-                  <div class="mk__row"><i>10:30</i><span>玉藻公園・高松城</span></div>
-                  <div class="mk__row"><i>11:30</i><span>栗林公園</span></div>
-                  <div class="mk__row"><i>13:00</i><span>讚岐烏龍午餐</span></div>
-                  <div class="mk__row"><i>14:30</i><span>屋島展望台</span></div>
-                  <div class="mk__chip mk__chip--g">可手動或叫 AI 調整</div>
-                </div>
-
-                <div class="mk mk--map story__slide" data-i="2">
-                  <span class="mk__pin" style="left:24%;top:30%">🗼</span>
-                  <span class="mk__pin" style="left:62%;top:46%">⛩️</span>
-                  <span class="mk__pin" style="left:44%;top:70%">🏯</span>
-                  <svg class="mk__route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M24 30 L62 46 L44 70" fill="none" stroke="#5b8def" stroke-width="1.4" stroke-dasharray="3 3"/></svg>
-                  <div class="mk__wx mk__wx--abs">🗺️ 任何國家 · 自動連線路線</div>
-                </div>
-
-                <div class="mk story__slide" data-i="3">
-                  <div class="mk__bar"><b>同行聊天</b><span>3 人</span></div>
-                  <div class="mk__bub">第三天想去看海 🌊</div>
-                  <div class="mk__bub mk__bub--me">@ai 第三天加一個海邊景點</div>
-                  <div class="mk__act">🤖 已加入「江之島」到第 3 天</div>
-                </div>
-              </div>
+        <div class="gl-show reveal">
+          <div class="gl-show__txt">
+            <span class="gl-eyebrow">共同編輯</span>
+            <h3>和朋友一起規劃，即時同步</h3>
+            <p>分享一條連結，大家就能加入同一份行程一起編輯。內建群組聊天，打一句 @ai，AI 就幫所有人調整行程。</p>
+            <ul class="gl-show__list">
+              <li><svg><use href="#i-check"/></svg>多人同時編輯、即時同步</li>
+              <li><svg><use href="#i-check"/></svg>群組聊天內直接呼叫 AI</li>
+              <li><svg><use href="#i-check"/></svg>權限分明，可隨時撤回邀請</li>
+            </ul>
+          </div>
+          <div class="gl-show__media">
+            <div class="mock">
+              <div class="mock__bar"><b>同行聊天</b><span>3 人</span></div>
+              <div class="mock__bub">第三天想去看海 🌊</div>
+              <div class="mock__bub mock__bub--me">@ai 第三天加一個海邊景點</div>
+              <div class="mock__row is-ai"><i>16:00</i><span>🤖 已加入「江之島」到第 3 天</span></div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="cover__final reveal">
-      <h2 class="cover__h1" style="font-size:clamp(26px,6vw,38px)">準備好出發了嗎？</h2>
-      <p class="cover__lead" style="margin:12px auto 22px">免費開始，幾秒就有你的第一份 AI 行程。</p>
-      <div class="cover__cta-row" style="justify-content:center">
-        <button class="btn btn--brand btn--lg" id="coverStartBottom">免費開始規劃</button>
-        <button class="btn btn--ghost" id="homeInstallBtn"><svg class="ic"><use href="#i-install"/></svg> 加入主畫面</button>
+    <!-- ===== How it works ===== -->
+    <section class="gl-section" id="gl-how" style="background:var(--surface-2)">
+      <div class="gl-wrap">
+        <div class="gl-head gl-center reveal">
+          <span class="gl-eyebrow">新手教學</span>
+          <h2 class="gl-h2">四步，開始你的旅程</h2>
+          <p class="gl-lead">不需要學習，照著做就好。</p>
+        </div>
+        <div class="gl-steps reveal">
+          <div class="gl-step"><div class="gl-step__n">1</div><h3>說出目的地</h3><p>輸入「5 天東京自由行，7/10 出發」，或用「AI 一鍵建立」回答幾個小問題。</p></div>
+          <div class="gl-step"><div class="gl-step__n">2</div><h3>AI 生成行程</h3><p>幾秒內產出完整逐日行程，含景點、交通、天氣與預算。</p></div>
+          <div class="gl-step"><div class="gl-step__n">3</div><h3>隨手微調</h3><p>拖拉排序、手動編輯，或一句話請 AI 重排、加景點、查封閉資訊。</p></div>
+          <div class="gl-step"><div class="gl-step__n">4</div><h3>出發 / 分享</h3><p>匯出 PDF 與行事曆、加入手機主畫面離線使用，或邀請朋友共編。</p></div>
+        </div>
       </div>
-      <p class="tiny muted-3" style="margin-top:30px">Plan AI · 用 AI 規劃任何旅程 ✈️</p>
     </section>
+
+    <!-- ===== Comparison ===== -->
+    <section class="gl-section" id="gl-compare">
+      <div class="gl-wrap">
+        <div class="gl-head gl-center reveal">
+          <span class="gl-eyebrow">為什麼選 Plan AI</span>
+          <h2 class="gl-h2">和其他服務比一比</h2>
+          <p class="gl-lead">把 AI 生成、地圖、天氣、預算、共編與匯出整合在一個免費 App。</p>
+        </div>
+        <div class="gl-table-wrap reveal">
+          <table class="gl-table">
+            <thead>
+              <tr>
+                <th style="text-align:left">功能</th>
+                <th class="col-us">Plan AI</th>
+                <th>Wanderlog</th>
+                <th>TripIt</th>
+                <th>Google 地圖</th>
+                <th>通用 AI 聊天</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th>AI 自動生成完整行程</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">部分</td><td class="gl-no">—</td><td class="gl-no">—</td><td class="gl-yes"><svg><use href="#i-check"/></svg></td></tr>
+              <tr><th>支援全球任何國家</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td></tr>
+              <tr><th>即時天氣 + 穿搭建議</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">部分</td><td class="gl-no">—</td><td class="gl-no">—</td></tr>
+              <tr><th>互動地圖 + 每日路線</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">部分</td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-no">—</td></tr>
+              <tr><th>預算試算 + 記帳</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-no">—</td><td class="gl-no">—</td><td class="gl-mid">純文字</td></tr>
+              <tr><th>PDF / 行事曆匯出</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">部分</td><td class="gl-no">—</td></tr>
+              <tr><th>多人即時共同編輯</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">部分</td><td class="gl-mid">部分</td><td class="gl-no">—</td></tr>
+              <tr><th>完全免費</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">免費增值</td><td class="gl-mid">需付費</td><td class="gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">免費增值</td></tr>
+              <tr><th>免安裝（PWA・可離線）</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-mid">App</td><td class="gl-no">App</td><td class="gl-mid">App</td><td class="gl-no">—</td></tr>
+              <tr><th>隱私：資料預設存在你的裝置</th><td class="col-us gl-yes"><svg><use href="#i-check"/></svg></td><td class="gl-no">雲端</td><td class="gl-no">雲端</td><td class="gl-no">雲端</td><td class="gl-no">雲端</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="gl-note">比較內容依各服務公開資訊整理，僅供參考；各服務名稱為其各自擁有者之商標。</p>
+      </div>
+    </section>
+
+    <!-- ===== Stats ===== -->
+    <section class="gl-section" id="gl-stats" style="padding-top:0">
+      <div class="gl-wrap reveal">
+        <div class="gl-stats">
+          <div class="gl-stat"><b>8+</b><span>整合功能模組</span></div>
+          <div class="gl-stat"><b>∞</b><span>可規劃的國家</span></div>
+          <div class="gl-stat"><b>0 元</b><span>永久免費</span></div>
+          <div class="gl-stat"><b>秒級</b><span>生成完整行程</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Privacy & docs ===== -->
+    <section class="gl-section" id="gl-privacy">
+      <div class="gl-wrap">
+        <div class="gl-priv reveal">
+          <div class="gl-head">
+            <span class="gl-eyebrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 9.5C8 19.4 5 15.4 5 11V6z"/></svg>隱私與安全</span>
+            <h2 class="gl-h2">你的旅程，由你作主</h2>
+            <p class="gl-lead">Plan AI 以「本機優先」設計：你的行程預設只存在你自己的瀏覽器裡。我們不販售你的資料、沒有廣告追蹤。</p>
+          </div>
+          <div class="gl-priv__grid">
+            <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><div><h4>本機優先儲存</h4><p>行程預設存在你裝置的瀏覽器，不上傳就完全離線可用。</p></div></div>
+            <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 9.5C8 19.4 5 15.4 5 11V6z"/><path d="M9 12l2 2 4-4"/></svg><div><h4>選擇性雲端同步</h4><p>登入 Google 後才會把行程安全同步到你的私人空間，方便跨裝置。</p></div></div>
+            <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg><div><h4>不販售・無廣告</h4><p>我們不販售你的個人資料，也沒有第三方廣告追蹤。</p></div></div>
+            <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg><div><h4>AI 僅用於規劃</h4><p>你的輸入只會傳給 AI 引擎產生行程，不會被用來投放廣告。</p></div></div>
+          </div>
+          <div class="gl-priv__docs">
+            <button class="gl-btn gl-btn--sm" data-legal="privacy">隱私權政策</button>
+            <button class="gl-btn gl-btn--sm" data-legal="terms">服務條款</button>
+            <button class="gl-btn gl-btn--sm" data-legal="security">資料與安全</button>
+            <button class="gl-btn gl-btn--sm" data-legal="about">關於 Plan AI</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FAQ ===== -->
+    <section class="gl-section" id="gl-faq" style="background:var(--surface-2)">
+      <div class="gl-wrap">
+        <div class="gl-head gl-center reveal">
+          <span class="gl-eyebrow">常見問題</span>
+          <h2 class="gl-h2">還有疑問？</h2>
+        </div>
+        <div class="gl-faq reveal" id="glFaq">
+          <div class="gl-faq__item"><button class="gl-faq__q">Plan AI 真的免費嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>是的，核心功能完全免費，沒有訂閱也不需要信用卡。你只要打開網站就能開始規劃。</p></div></div>
+          <div class="gl-faq__item"><button class="gl-faq__q">需要下載安裝嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>不用。Plan AI 是漸進式網頁應用（PWA），用瀏覽器即可使用；也能「加入主畫面」像 App 一樣開啟並離線瀏覽已存的行程。</p></div></div>
+          <div class="gl-faq__item"><button class="gl-faq__q">支援哪些國家？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>全球任何國家與城市都能規劃。內建一份「日本九州・瀨戶內・關西」的範本行程，你可以直接複製來改，或讓 AI 從零幫你建立。</p></div></div>
+          <div class="gl-faq__item"><button class="gl-faq__q">我的資料安全嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>行程預設只存在你裝置的瀏覽器。只有在你登入 Google 並開啟同步時，才會安全地存到你的私人雲端空間。我們不販售資料、沒有廣告追蹤。詳見隱私權政策。</p></div></div>
+          <div class="gl-faq__item"><button class="gl-faq__q">可以離線使用嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>可以。安裝後，已開啟過的行程、地圖與資料會被快取，沒有網路時仍能查看；AI 生成與即時天氣則需要連線。</p></div></div>
+          <div class="gl-faq__item"><button class="gl-faq__q">怎麼和朋友一起規劃？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>開啟行程的「邀請」功能、分享連結，朋友點開就能加入同一份行程一起即時編輯，還能在群組聊天裡 @ai 請 AI 幫忙調整。</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Final CTA ===== -->
+    <section class="gl-section" style="padding-top:0">
+      <div class="gl-wrap">
+        <div class="gl-cta reveal">
+          <h2>準備好出發了嗎？</h2>
+          <p>免費開始，幾秒就有你的第一份 AI 行程。</p>
+          <div class="gl-hero__cta" style="margin-top:0">
+            <button class="gl-btn gl-btn--lg" id="coverStartBottom">免費開始規劃</button>
+            <button class="gl-btn gl-btn--lg gl-btn--ghost" id="homeInstallBtn"><svg class="ic" style="width:18px;height:18px"><use href="#i-install"/></svg> 加入主畫面</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Footer ===== -->
+    <footer class="gl-footer">
+      <div class="gl-wrap">
+        <div class="gl-footer__grid">
+          <div class="gl-footer__brand">
+            <a class="gl-brand" data-scroll="#gl-top"><span class="gl-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><path d="M12 6.7l1.05 2.25 2.25 1.05-2.25 1.05L12 13.3l-1.05-2.25-2.25-1.05 2.25-1.05z" fill="#fff" stroke="none"/></svg></span>Plan AI</a>
+            <p>用 AI 規劃、編輯與共享你的旅程。免費、免安裝、支援全球任何國家。</p>
+          </div>
+          <div><h5>產品</h5><ul><li><a data-scroll="#gl-features">功能</a></li><li><a data-scroll="#gl-showcase">展示</a></li><li><a data-scroll="#gl-how">教學</a></li><li><a data-scroll="#gl-compare">比較</a></li></ul></div>
+          <div><h5>資源</h5><ul><li><a data-scroll="#gl-faq">常見問題</a></li><li><a data-act="install">加入主畫面</a></li><li><a data-act="start">開始規劃</a></li></ul></div>
+          <div><h5>法務</h5><ul><li><a data-legal="privacy">隱私權政策</a></li><li><a data-legal="terms">服務條款</a></li><li><a data-legal="security">資料與安全</a></li><li><a data-legal="about">關於</a></li></ul></div>
+        </div>
+        <div class="gl-footer__bottom">
+          <span>© 2026 Plan AI · 個人非商業專案，依現況提供。</span>
+          <div class="gl-seg" id="glThemeSeg" role="group" aria-label="主題">
+            <button data-theme-set="light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5V4M12 20v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M1.5 12H4M20 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>淺色</button>
+            <button data-theme-set="dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>深色</button>
+            <button data-theme-set="system"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>自動</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ===== Legal modal ===== -->
+    <div class="gl-modal" id="glModal" aria-hidden="true">
+      <div class="gl-modal__scrim" data-legal-close></div>
+      <div class="gl-modal__panel" role="dialog" aria-modal="true" aria-labelledby="glModalTitle">
+        <div class="gl-modal__head"><h3 id="glModalTitle">隱私權政策</h3><button class="gl-iconbtn" data-legal-close aria-label="關閉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="gl-modal__body gl-doc" id="glModalBody"></div>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -243,18 +455,27 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
   </header>
   <main class="plans-main">
     <div class="section-head" style="margin-top:4px"><h1 class="h-display">行程計劃</h1></div>
-    <div class="ai-create">
-      <div class="ai-create__head"><span class="ai-create__spark"><svg class="ic"><use href="#i-ai"/></svg></span><b>用 AI 建立行程</b></div>
-      <div class="ai-create__field">
-        <textarea id="aiCreateInput" rows="1" placeholder="描述你想要的旅程，例如：想多吃美食、想輕鬆一點、第一天加溫泉…"></textarea>
-        <button class="send-btn" id="aiCreateBtn" title="建立"><svg><use href="#i-send"/></svg></button>
-      </div>
-      <div class="ai-create__chips" id="aiCreateChips"></div>
+    <!-- 我的計劃 / 社群 segmented toggle -->
+    <div class="plans-seg" id="plansSeg">
+      <button class="plans-seg__btn is-on" data-seg="mine">我的計劃</button>
+      <button class="plans-seg__btn" data-seg="community">🌟 社群</button>
     </div>
-    <div id="plansList" class="stagger"></div>
-    <div class="section-head" style="margin-top:24px"><h2 class="h-section">從範本建立新行程</h2></div>
-    <div id="templateList"></div>
-    <p class="tiny muted-3" style="margin:14px 4px 0">點範本會「複製」一份新的可編輯行程，範本本身不會被改動。</p>
+    <div id="mineRoot">
+      <div class="ai-create">
+        <div class="ai-create__head"><span class="ai-create__spark"><svg class="ic"><use href="#i-ai"/></svg></span><b>用 AI 建立行程</b></div>
+        <div class="ai-create__field">
+          <textarea id="aiCreateInput" rows="1" placeholder="描述你想要的旅程，例如：想多吃美食、想輕鬆一點、第一天加溫泉…"></textarea>
+          <button class="send-btn" id="aiCreateBtn" title="建立"><svg><use href="#i-send"/></svg></button>
+        </div>
+        <div class="ai-create__chips" id="aiCreateChips"></div>
+      </div>
+      <div id="plansList" class="stagger"></div>
+      <div class="section-head" style="margin-top:24px"><h2 class="h-section">從範本建立新行程</h2></div>
+      <div id="templateList"></div>
+      <p class="tiny muted-3" style="margin:14px 4px 0">點範本會「複製」一份新的可編輯行程，範本本身不會被改動。</p>
+    </div>
+    <!-- 社群：瀏覽大家發佈的行程（唯讀，可複製到自己的清單） -->
+    <div id="communityRoot" hidden></div>
   </main>
 </section>
 
@@ -454,5 +675,118 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
 
 <!-- App (ES modules) -->
 <script type="module" src="assets/js/main.js"></script>
+
+<!-- Landing (intro) interactions: theme light/dark/auto · menu · smooth-scroll · FAQ · legal docs -->
+<script>
+(function () {
+  var root = document.documentElement;
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  var ICONS = {
+    light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5V4M12 20v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M1.5 12H4M20 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>',
+    dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>',
+    system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
+  };
+  var NAME = { light: '淺色', dark: '深色', system: '自動' };
+  // Source of truth for the landing's 3-way control. We keep our own key so "auto"
+  // survives reloads even though main.js pins kp_theme to a concrete value on boot.
+  function mode() { var s = localStorage.getItem('kp_thememode'); return (s === 'light' || s === 'dark' || s === 'system') ? s : 'system'; }
+  function sync() {
+    var m = mode();
+    var tb = document.getElementById('glTheme');
+    if (tb) { tb.innerHTML = ICONS[m]; tb.title = '主題：' + NAME[m] + '（點按切換）'; }
+    var segs = document.querySelectorAll('#glThemeSeg button');
+    for (var i = 0; i < segs.length; i++) segs[i].classList.toggle('on', segs[i].getAttribute('data-theme-set') === m);
+  }
+  function apply(m) {
+    localStorage.setItem('kp_thememode', m);
+    if (m === 'system') { localStorage.removeItem('kp_theme'); root.dataset.theme = mq.matches ? 'dark' : 'light'; }
+    else { localStorage.setItem('kp_theme', m); root.dataset.theme = m; }
+    sync();
+  }
+  if (mode() === 'system') root.dataset.theme = mq.matches ? 'dark' : 'light';
+  if (mq.addEventListener) mq.addEventListener('change', function () { if (mode() === 'system') root.dataset.theme = mq.matches ? 'dark' : 'light'; });
+  var themeBtn = document.getElementById('glTheme');
+  if (themeBtn) themeBtn.addEventListener('click', function () { var o = ['system', 'light', 'dark']; apply(o[(o.indexOf(mode()) + 1) % 3]); });
+  document.querySelectorAll('#glThemeSeg button').forEach(function (b) { b.addEventListener('click', function () { apply(b.getAttribute('data-theme-set')); }); });
+  sync();
+
+  var nav = document.getElementById('glNav');
+  function onScroll() { if (nav) nav.classList.toggle('is-stuck', window.scrollY > 6); }
+  window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  var menuBtn = document.getElementById('glMenuBtn'), mobile = document.getElementById('glMobile');
+  function closeMenu() { if (mobile) mobile.classList.remove('open'); }
+  if (menuBtn) menuBtn.addEventListener('click', function () { if (mobile) mobile.classList.toggle('open'); });
+
+  function scrollToSel(sel) { var t = document.querySelector(sel); if (!t) return; var y = t.getBoundingClientRect().top + window.scrollY - 70; window.scrollTo({ top: y < 0 ? 0 : y, behavior: 'smooth' }); }
+  document.querySelectorAll('[data-scroll]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); closeMenu(); scrollToSel(a.getAttribute('data-scroll')); }); });
+
+  function act(name) {
+    if (name === 'start') { var g = document.getElementById('guestEnter'); if (g) g.click(); }
+    else if (name === 'install') { var ins = document.getElementById('homeInstallBtn'); if (ins) ins.click(); }
+  }
+  document.querySelectorAll('[data-act]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); closeMenu(); act(a.getAttribute('data-act')); }); });
+  var ms = document.getElementById('glMobileStart'); if (ms) ms.addEventListener('click', function () { closeMenu(); act('start'); });
+
+  document.querySelectorAll('#glFaq .gl-faq__q').forEach(function (q) {
+    q.addEventListener('click', function () {
+      var item = q.parentElement, a = q.nextElementSibling, open = item.classList.toggle('open');
+      a.style.maxHeight = open ? (a.scrollHeight + 'px') : '0px';
+    });
+  });
+
+  var DOCS = {
+    privacy: { title: '隱私權政策', html: `<p class="upd">最後更新：2026 年 6 月</p>
+<p>Plan AI（以下稱「本服務」）是一個個人、非商業的旅程規劃工具，以「本機優先」設計。本政策說明我們如何處理你的資料。</p>
+<h4>我們收集哪些資料</h4>
+<ul><li><b>行程內容</b>：你建立的行程、活動、預算與筆記，預設只儲存在你裝置的瀏覽器中（localStorage）。</li>
+<li><b>帳號資料（選用）</b>：若你以 Google 登入，我們會取得你的名稱、Email 與大頭貼，用於識別與雲端同步。</li>
+<li><b>你輸入給 AI 的內容</b>：用於產生行程建議。</li></ul>
+<h4>資料如何使用</h4>
+<ul><li>提供並同步你的行程、產生 AI 規劃、顯示地圖與天氣。</li>
+<li>我們<b>不販售</b>你的個人資料，也<b>沒有</b>第三方廣告追蹤。</li></ul>
+<h4>第三方服務</h4>
+<p>為提供功能，部分資料會傳送給下列服務，並受其各自隱私政策約束：AI 引擎（生成行程）、Google／Firebase（登入與雲端同步）、地圖圖資（OpenStreetMap／CARTO）、天氣（Open-Meteo）。</p>
+<h4>你的選擇</h4>
+<ul><li>不登入即可完全在本機使用；可隨時登出或在設定中清除資料。</li>
+<li>清除瀏覽器資料即可移除本機儲存的行程。</li></ul>
+<h4>聯絡</h4>
+<p>本服務為開源專案，相關問題與資料請求可透過專案頁面提出。</p>` },
+    terms: { title: '服務條款', html: `<p class="upd">最後更新：2026 年 6 月</p>
+<h4>服務說明</h4>
+<p>Plan AI 是一個免費、個人、非商業的旅程規劃工具，依「現況（as-is）」提供，不附任何明示或默示之保證。</p>
+<h4>使用規範</h4>
+<ul><li>請勿將本服務用於非法用途，或濫用 AI 與第三方服務。</li>
+<li>你需為自己建立與分享的內容負責。</li></ul>
+<h4>行程資訊免責</h4>
+<p>AI 生成的行程、交通、票價、營業時間與天氣等資訊僅供參考，可能與實際情況不同。出發前請以官方來源為準；本服務不對因依賴這些資訊所生之任何損失負責。</p>
+<h4>可用性</h4>
+<p>服務內容可能隨時調整或中止，恕不另行通知。</p>
+<h4>智慧財產</h4>
+<p>各第三方服務、地名與商標均屬其各自擁有者所有。</p>` },
+    security: { title: '資料與安全', html: `<p class="upd">最後更新：2026 年 6 月</p>
+<h4>本機優先</h4>
+<p>你的行程預設只存在裝置的瀏覽器，不上傳即可離線使用。</p>
+<h4>傳輸加密</h4>
+<p>所有連線採用 HTTPS 加密。雲端同步透過 Google Firebase 進行，資料存放於你帳號專屬的空間並受其安全機制保護。</p>
+<h4>登入方式</h4>
+<p>採用 Google OAuth，本服務不會看到或保存你的 Google 密碼。</p>
+<h4>最小化原則</h4>
+<p>僅在提供功能所需時才傳輸資料，不販售、不做廣告追蹤。</p>
+<h4>你的責任</h4>
+<p>請妥善保管你的裝置與 Google 帳號；於公用裝置使用後請記得登出。</p>` },
+    about: { title: '關於 Plan AI', html: `<p class="upd">版本：2026 · 個人專案</p>
+<p>Plan AI 是一個用 AI 規劃任何旅程的免費工具：一句話生成完整逐日行程，並整合地圖、天氣、預算、旅遊錦囊、PDF／行事曆匯出與多人即時共編。</p>
+<p>技術組成：純靜態前端的漸進式網頁應用（PWA）＋ Cloudflare；地圖 OpenStreetMap、天氣 Open-Meteo、帳號與同步 Firebase。可加入主畫面離線使用。</p>
+<p>本服務為個人、非商業專案，依現況提供。</p>` }
+  };
+  var modal = document.getElementById('glModal'), mTitle = document.getElementById('glModalTitle'), mBody = document.getElementById('glModalBody');
+  function openLegal(key) { var d = DOCS[key]; if (!d || !modal) return; mTitle.textContent = d.title; mBody.innerHTML = d.html; mBody.scrollTop = 0; modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); }
+  function closeLegal() { if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); } }
+  document.querySelectorAll('[data-legal]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); closeMenu(); openLegal(a.getAttribute('data-legal')); }); });
+  document.querySelectorAll('[data-legal-close]').forEach(function (b) { b.addEventListener('click', closeLegal); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLegal(); });
+})();
+</script>
 </body>
 </html>

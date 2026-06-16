@@ -11,7 +11,7 @@ import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.
 import { initMap, refreshMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
 import { initGemini, getCfg, generateTripPlan } from './ai.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
-import { initFirebase, fb, signInGoogle, signOutUser, authErrorMessage, pullUserData, pushUserData, shareSave, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs, collabSetGeneral, collabSetPersonRole, collabRemovePerson, collabDelete } from './firebase.js';
+import { initFirebase, fb, signInGoogle, signOutUser, authErrorMessage, pullUserData, pushUserData, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs, collabSetGeneral, collabSetPersonRole, collabRemovePerson, collabDelete, collabModelGet, feedReady, feedPublish, feedUnpublish, feedList, feedGet, feedLikeToggle, feedLikedSet } from './firebase.js';
 import * as Notify from './notify.js';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1083,6 +1083,44 @@ const canComment = () => ['owner', 'editor', 'commenter'].includes(myRole());
 const isOwnerRole = () => myRole() === 'owner';
 const READONLY = { ok: false, msg: '唯讀：你目前沒有這份行程的編輯權限' };
 
+// ---- Community feed: visibility, ranking, filters ----
+// Visibility a plan owner can choose (stored on collab/{code}.visibility):
+const VIS_OPTS = [
+  ['private', '🔒 私人', '只有你邀請的人能看'],
+  ['link', '🔗 知道連結的人', '拿到連結的人都能開'],
+  ['public', '🌐 公開', '任何人都能瀏覽（唯讀）'],
+  ['community', '🌟 社群', '發佈到社群，大家都看得到、可複製'],
+];
+// Travel-mode tags = the same chips the AI wizard uses (single source of truth).
+const TRAVEL_THEMES = ['美食', '自然風景', '歷史文化', '購物', '親子', '網美打卡', '溫泉放鬆', '夜生活'];
+const REGIONS = ['東亞', '東南亞', '南亞', '歐洲', '北美', '中美', '南美', '中東', '非洲', '大洋洲'];
+const COUNTRY_TO_REGION = {
+  '台灣': '東亞', '臺灣': '東亞', '日本': '東亞', '韓國': '東亞', '南韓': '東亞', '香港': '東亞', '澳門': '東亞', '中國': '東亞', '蒙古': '東亞',
+  '泰國': '東南亞', '越南': '東南亞', '柬埔寨': '東南亞', '寮國': '東南亞', '緬甸': '東南亞', '馬來西亞': '東南亞', '新加坡': '東南亞', '印尼': '東南亞', '菲律賓': '東南亞', '汶萊': '東南亞',
+  '印度': '南亞', '尼泊爾': '南亞', '斯里蘭卡': '南亞', '孟加拉': '南亞', '巴基斯坦': '南亞', '不丹': '南亞', '馬爾地夫': '南亞',
+  '法國': '歐洲', '德國': '歐洲', '義大利': '歐洲', '西班牙': '歐洲', '葡萄牙': '歐洲', '英國': '歐洲', '愛爾蘭': '歐洲', '瑞士': '歐洲', '奧地利': '歐洲', '荷蘭': '歐洲', '比利時': '歐洲', '捷克': '歐洲', '波蘭': '歐洲', '匈牙利': '歐洲', '希臘': '歐洲', '克羅埃西亞': '歐洲', '丹麥': '歐洲', '瑞典': '歐洲', '挪威': '歐洲', '芬蘭': '歐洲', '冰島': '歐洲', '俄羅斯': '歐洲',
+  '美國': '北美', '加拿大': '北美',
+  '墨西哥': '中美', '古巴': '中美', '哥斯大黎加': '中美', '瓜地馬拉': '中美',
+  '巴西': '南美', '阿根廷': '南美', '智利': '南美', '秘魯': '南美', '哥倫比亞': '南美', '玻利維亞': '南美',
+  '阿聯酋': '中東', '杜拜': '中東', '沙烏地阿拉伯': '中東', '土耳其': '中東', '以色列': '中東', '約旦': '中東', '卡達': '中東',
+  '埃及': '非洲', '南非': '非洲', '摩洛哥': '非洲', '肯亞': '非洲', '坦尚尼亞': '非洲',
+  '澳洲': '大洋洲', '紐西蘭': '大洋洲', '斐濟': '大洋洲', '帛琉': '大洋洲', '關島': '大洋洲',
+};
+const regionOf = country => COUNTRY_TO_REGION[(country || '').trim()] || '';
+// Hacker-News-style gravity: recent + liked rises; pure client-side, no cron.
+function hotScore(likeCount, createdAtMs) {
+  const ageHours = Math.max(0, (Date.now() - (createdAtMs || 0)) / 3.6e6);
+  return ((likeCount || 0) + 1) / Math.pow(ageHours + 2, 1.2);
+}
+// Community-tab UI state (persists across segment toggles within a session).
+let communityMode = false;
+let communitySort = 'hot';                 // 'hot' | 'recent' | 'top'
+let communityFilters = { country: '', region: '', themes: [] };
+let communityCache = [];                    // last feedList() result
+let communityLiked = new Set();             // codes the user has liked
+let communityLoaded = false;
+let communityReq = 0;                       // monotonic load token (ignore stale completions)
+
 const uid = () => Math.random().toString(36).slice(2, 9);
 const plansMeta = () => store.get('kp_plans', []);
 const setPlansMeta = a => store.set('kp_plans', a);
@@ -1380,32 +1418,9 @@ function openAiWizard() {
   openSheet('sheet');
 }
 
-// ---- Sharing (Firebase if signed in, else Cloudflare KV) ----
-// Uploads the plan snapshot under a stable, revocable code stored on the plan meta,
-// so the same invite link keeps working and can be turned off later.
-async function uploadShare(code, payload) {
-  if (fb.configured && fb.user) { await shareSave(code, payload); return; }
-  const res = await fetch('/api/plan?code=' + encodeURIComponent(code), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  if (res.status === 501) throw new Error('分享需先設定雲端（Firebase 登入，或 Cloudflare KV）');
-  if (!res.ok) throw new Error('伺服器錯誤（' + res.status + '）');
-}
-async function generateShare(id) {
-  if (id === currentPlanId) snapshotCurrent();
-  const data = store.get('kp_state:' + id, templateSnapshot());
-  const arr = plansMeta(); const m = arr.find(p => p.id === id);
-  const code = (m && m.share) || uid();
-  await uploadShare(code, { meta: { title: m ? m.title : '行程', emoji: m ? m.emoji : '🗾' }, state: data });
-  if (m && m.share !== code) { m.share = code; setPlansMeta(arr); }
-  return { code, link: location.origin + location.pathname + '?plan=' + code };
-}
-async function revokeShare(id) {
-  const arr = plansMeta(); const m = arr.find(p => p.id === id);
-  if (!m || !m.share) return;
-  try { await uploadShare(m.share, { revoked: true }); } catch { /* best effort */ }
-  delete m.share; setPlansMeta(arr);
-}
-function shareLinkFor(id) { const m = plansMeta().find(p => p.id === id); return m && m.share ? location.origin + location.pathname + '?plan=' + m.share : null; }
-
+// ---- Importing a legacy "copy" share (old ?plan=<code> links) ----
+// New shares are live + permissioned (see openShareSheet); this keeps old
+// copy-links working: it loads a one-off editable COPY (Firestore `shared/` or KV).
 async function importSharedCode(code) {
   if (!code) return;
   try {
@@ -1440,6 +1455,24 @@ function roleSelect(value, opts, onChange) {
   return sel;
 }
 const validEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e || '');
+// Build the SAFE public feed metadata from a collab doc (never copies model/members/emails/access).
+function buildFeedMeta(doc, visibility, themes) {
+  const model = (doc && doc.model) || {}; const trip = model.trip || {};
+  const country = (trip.country || '').trim();
+  let ownerName = (doc.members && doc.owner && doc.members[doc.owner] && doc.members[doc.owner].name)
+    || (fb.user && fb.user.displayName) || '旅人';
+  if (ownerName.includes('@')) ownerName = ownerName.split('@')[0];   // never leak a full email into the PUBLIC feed
+  return {
+    title: (doc.meta && doc.meta.title) || trip.title || '行程',
+    emoji: (doc.meta && doc.meta.emoji) || trip.emoji || '🗺️',
+    country, region: regionOf(country),
+    themes: (themes || []).slice(0, 8),
+    days: (model.days || []).length || (+trip.days || 0),
+    cityCount: (model.cities || []).length || 0,
+    summary: ((trip.subtitle || '') + '').slice(0, 60),
+    ownerName, visibility,
+  };
+}
 
 async function openShareSheet(id) {
   $('#sheetTitle').textContent = '分享與權限';
@@ -1466,11 +1499,15 @@ async function openShareSheet(id) {
   try { if (!code) code = await enableCollab(id); } catch (e) { loading.textContent = '建立共享失敗：' + (e && e.message || ''); return; }
   if (!code) { loading.textContent = '無法建立共享連結'; return; }
   const link = location.origin + location.pathname + '?join=' + code;
+  let pubThemes = [];          // travel-mode tags for the feed listing (persist across re-paints)
+  let pubInit = false;
+  let tagPubT = null;          // debounce timer for tag re-publish
 
   // (Re)render the whole body from the latest doc state.
   async function paint() {
     if ($('#sheetTitle').textContent !== '分享與權限') return;   // user navigated away
     let doc = null; try { doc = await collabGet(code); } catch {}
+    if (!pubInit) { try { const ff = await feedGet(code); if (ff && Array.isArray(ff.themes)) pubThemes = ff.themes.slice(); } catch {} pubInit = true; }
     const role = roleForDoc(doc) || (doc && fb.user && doc.owner === fb.user.uid ? 'owner' : 'editor');
     const owner = role === 'owner';
     const access = (doc && doc.access) || { general: 'editor', people: {} };
@@ -1513,6 +1550,47 @@ async function openShareSheet(id) {
         el('.access-row__who', {}, [el('b', { text: access.general === 'restricted' ? '🔒 限定' : '🔗 知道連結的人' }), el('.tiny.muted-3', { text: access.general === 'restricted' ? '只有上方被加入的人能開啟' : '任何拿到連結的人都能開啟' })]),
         roleSelect(access.general || 'editor', GENERAL_OPTS, async v => { try { await collabSetGeneral(code, v); paint(); } catch (e) { toast('更新失敗：' + (e && e.message || '')); } }),
       ]));
+
+      // --- Visibility / publish to community ---
+      const visibility = (doc && doc.visibility) || 'link';
+      const applyVisibility = async v => {
+        try {
+          if (v === 'private') { await collabSetGeneral(code, 'restricted'); await collabSave(code, { visibility: 'private' }); await feedUnpublish(code); }
+          else if (v === 'link') { if (((doc.access && doc.access.general) || 'editor') === 'restricted') await collabSetGeneral(code, 'editor'); await collabSave(code, { visibility: 'link' }); await feedUnpublish(code); }
+          else {
+            // Publishing to the public feed must make the live doc READ-ONLY to link-holders:
+            // force editor/commenter → viewer so the public join code can never grant live edits.
+            // (Keep 'viewer', not 'restricted', so forkers can still read collab.model.)
+            const g = (doc.access && doc.access.general) || 'editor';
+            if (g === 'editor' || g === 'commenter') await collabSetGeneral(code, 'viewer');
+            await collabSave(code, { visibility: v });
+            await feedPublish(code, buildFeedMeta(doc, v, pubThemes));
+          }
+          communityLoaded = false;   // feed changed → refresh on next 社群 open
+          toast(v === 'private' ? '已設為私人' : v === 'link' ? '已設為知道連結的人' : v === 'public' ? '已設為公開' : '已發佈到社群 🌟');
+          paint();
+        } catch (e) { toast('變更失敗：' + (e && e.message || '')); }
+      };
+      body.appendChild(el('.tiny.muted-3', { style: { fontWeight: '700', margin: '18px 2px 6px' }, text: '發佈與可見範圍' }));
+      const visRow = el('.chiprow', { style: { flexWrap: 'wrap' } });
+      VIS_OPTS.forEach(([v, label]) => visRow.appendChild(el('button.chip.chip--tap' + (visibility === v ? '.is-on' : ''), { onclick: () => applyVisibility(v) }, label)));
+      body.appendChild(visRow);
+      body.appendChild(el('.tiny.muted-3', { style: { margin: '4px 2px 0', lineHeight: '1.6' }, text: (VIS_OPTS.find(o => o[0] === visibility) || [])[2] || '' }));
+      if (visibility === 'public' || visibility === 'community') {
+        const country = (((doc.model || {}).trip || {}).country || '').trim();
+        body.appendChild(el('.tiny.muted-3', { style: { margin: '10px 2px 4px' }, text: '旅行模式標籤（幫助別人找到你的行程）' }));
+        const tRow = el('.chiprow', { style: { flexWrap: 'wrap' } });
+        // Coalesce a burst of tag taps into ONE re-publish (avoids write amplification).
+        const schedulePublish = () => { clearTimeout(tagPubT); tagPubT = setTimeout(async () => {
+          try { await feedPublish(code, buildFeedMeta(doc, visibility, pubThemes)); communityLoaded = false; } catch (err) { toast('更新失敗：' + (err && err.message || '')); }
+        }, 450); };
+        TRAVEL_THEMES.forEach(t => tRow.appendChild(el('button.chip.chip--tap' + (pubThemes.includes(t) ? '.is-on' : ''), { onclick: e => {
+          const i = pubThemes.indexOf(t); if (i >= 0) { pubThemes.splice(i, 1); e.currentTarget.classList.remove('is-on'); } else { pubThemes.push(t); e.currentTarget.classList.add('is-on'); }
+          schedulePublish();
+        } }, t)));
+        body.appendChild(tRow);
+        body.appendChild(el('.tiny.muted-3', { style: { margin: '6px 2px 0' }, text: '國家：' + (country || '未填（建議在行程設定國家）') + (regionOf(country) ? ' · 區域：' + regionOf(country) : '') }));
+      }
     } else {
       // Non-owner: show own role only.
       body.appendChild(el('.access-row', {}, [
@@ -1542,10 +1620,12 @@ async function openShareSheet(id) {
     if (owner) {
       body.appendChild(el('.tiny.muted-3', { style: { margin: '14px 2px 8px', lineHeight: '1.7' }, text: 'ℹ️ 用 Email 新增的人需用「該 Google 帳號」開啟連結登入（系統不會自動寄信）。' }));
       body.appendChild(el('button.btn.btn--block', { style: { color: 'var(--sakura)' }, onclick: async () => {
-        if (!await confirmDialog({ title: '停止共享', message: '所有成員將失去存取權，連結也會失效。你的行程會保留為本機私人副本。', confirmText: '停止共享', danger: true })) return;
+        if (!await confirmDialog({ title: '停止共享', message: '所有成員將失去存取權，連結也會失效，也會從社群下架。你的行程會保留為本機私人副本。', confirmText: '停止共享', danger: true })) return;
+        try { await feedUnpublish(code); } catch {}   // delist BEFORE deleting collab (rules verify owner via collab)
         try { await collabDelete(code); } catch {}
         const arr = plansMeta(); const mm = arr.find(p => p.id === id); if (mm) { delete mm.collab; delete mm.share; setPlansMeta(arr); }
         if (id === currentPlanId) stopCollab();
+        communityLoaded = false;
         closeSheets(); toast('已停止共享，改為本機私人行程'); renderPlans();
       } }, [icon('i-trash'), '停止共享（設為私人）']));
     } else {
@@ -1890,6 +1970,12 @@ function renderPlans() {
     if (fb.user && fb.user.photoURL) authBtn.innerHTML = `<img src="${fb.user.photoURL}" alt="" referrerpolicy="no-referrer" style="width:28px;height:28px;border-radius:50%;object-fit:cover">`;
     else authBtn.innerHTML = '<svg class="ic"><use href="#i-user"/></svg>';
   }
+  // keep the 我的計劃 / 社群 segment consistent (e.g. after login re-renders plans)
+  const mineR = $('#mineRoot'), comR = $('#communityRoot');
+  if (mineR) mineR.hidden = communityMode;
+  if (comR) comR.hidden = !communityMode;
+  $$('#plansSeg .plans-seg__btn').forEach(b => b.classList.toggle('is-on', (b.dataset.seg === 'community') === communityMode));
+  if (communityMode) renderCommunity();
 }
 function planCard(m) {
   return el('.plan-card', { onclick: () => openPlan(m.id) }, [
@@ -1929,6 +2015,187 @@ function templateCard() {
     el('.plan-card__body', {}, [el('.plan-card__title', { text: '載入共享行程' }), el('.plan-card__meta', {}, [el('span', { text: '用同行者給的分享碼／連結' })])]),
   ]);
   return el('div', {}, [aiWizard, card, aiCard, loadShared]);
+}
+
+// ============================================================================
+// Community feed — browse / like / fork everyone's public trips (read-only).
+// Backed by feed/{code}; ranking + filtering are 100% client-side.
+// ============================================================================
+function communityTab(on) {
+  communityMode = on;
+  $$('#plansSeg .plans-seg__btn').forEach(b => b.classList.toggle('is-on', (b.dataset.seg === 'community') === on));
+  const mine = $('#mineRoot'), com = $('#communityRoot');
+  if (mine) mine.hidden = on;
+  if (com) com.hidden = !on;
+  if (on) renderCommunity();
+}
+async function renderCommunity(forceReload = false) {
+  const root = $('#communityRoot'); if (!root) return;
+  clear(root);
+  if (!feedReady()) {
+    root.appendChild(el('.empty', { style: { paddingTop: '34px' } }, [
+      el('.empty__emoji', { text: '☁️' }), el('div', { text: '社群需要連接雲端' }),
+      el('.tiny.muted-3', { style: { marginTop: '6px' }, text: '稍後再試，或先用「我的計劃」。' }),
+    ]));
+    return;
+  }
+  // intro + refresh
+  root.appendChild(el('.row-between', { style: { alignItems: 'center', margin: '2px 2px 8px' } }, [
+    el('p', { class: 'tiny muted', style: { lineHeight: '1.6', flex: '1 1 auto', paddingRight: '10px' }, text: '看看大家公開的行程，按讚收藏靈感；喜歡就一鍵「複製到我的」自由編輯。' }),
+    el('button.iconbtn', { title: '重新整理', onclick: () => renderCommunity(true) }, [icon('i-route')]),
+  ]));
+  // sort segmented
+  const sortRow = el('.community-sort');
+  [['hot', '🔥 熱門'], ['recent', '🆕 最新'], ['top', '♥ 最多讚']].forEach(([v, l]) => {
+    const b = el('button.chip.chip--tap' + (communitySort === v ? '.is-on' : ''), { onclick: () => { communitySort = v; [...sortRow.children].forEach(x => x.classList.remove('is-on')); b.classList.add('is-on'); paintCommunityList(); } }, l);
+    sortRow.appendChild(b);
+  });
+  root.appendChild(sortRow);
+  const filtersHost = el('.community-filters', { id: 'communityFilters' }); root.appendChild(filtersHost);
+  const listWrap = el('div', { id: 'communityList' }); root.appendChild(listWrap);
+
+  if (!communityLoaded || forceReload) {
+    const myReq = ++communityReq;   // claim this load; a newer load supersedes us
+    listWrap.appendChild(el('.tiny.muted-3', { style: { textAlign: 'center', padding: '26px' }, text: '載入社群行程中…' }));
+    try {
+      const list = await feedList(60);
+      const liked = fb.user ? await feedLikedSet(list.map(f => f.code).filter(Boolean)) : new Set();
+      if (myReq !== communityReq || communityMode === false) return;   // superseded / toggled away
+      communityCache = list; communityLiked = liked; communityLoaded = true;
+    } catch (e) { console.warn('community load', e); if (myReq !== communityReq) return; }
+  }
+  buildCommunityFilters(filtersHost);
+  paintCommunityList();
+}
+function buildCommunityFilters(host) {
+  if (!host) return; clear(host);
+  const countries = [...new Set(communityCache.map(f => (f.country || '').trim()).filter(Boolean))].sort();
+  const presentRegions = new Set(communityCache.map(f => f.region || regionOf(f.country)).filter(Boolean));
+  const refresh = () => { buildCommunityFilters(host); paintCommunityList(); };
+  const mkRow = (label, opts, current, onPick) => {
+    if (!opts.length) return;
+    const chips = el('.chiprow', { style: { flexWrap: 'wrap' } });
+    chips.appendChild(el('button.chip.chip--tap' + (!current ? '.is-on' : ''), { onclick: () => onPick('') }, '全部'));
+    opts.forEach(o => chips.appendChild(el('button.chip.chip--tap' + (current === o ? '.is-on' : ''), { onclick: () => onPick(o) }, o)));
+    host.appendChild(el('.community-filter', {}, [el('.tiny.muted-3.community-filter__lbl', { text: label }), chips]));
+  };
+  mkRow('區域', REGIONS.filter(r => presentRegions.has(r)), communityFilters.region, v => { communityFilters.region = v; communityFilters.country = ''; refresh(); });
+  mkRow('國家', countries, communityFilters.country, v => { communityFilters.country = v; communityFilters.region = ''; refresh(); });
+  // travel-mode tags (multi)
+  const tChips = el('.chiprow', { style: { flexWrap: 'wrap' } });
+  TRAVEL_THEMES.forEach(t => tChips.appendChild(el('button.chip.chip--tap' + (communityFilters.themes.includes(t) ? '.is-on' : ''), { onclick: e => {
+    const i = communityFilters.themes.indexOf(t);
+    if (i >= 0) { communityFilters.themes.splice(i, 1); e.currentTarget.classList.remove('is-on'); } else { communityFilters.themes.push(t); e.currentTarget.classList.add('is-on'); }
+    paintCommunityList();
+  } }, t)));
+  host.appendChild(el('.community-filter', {}, [el('.tiny.muted-3.community-filter__lbl', { text: '旅行模式' }), tChips]));
+}
+function paintCommunityList() {
+  const wrap = $('#communityList'); if (!wrap) return; clear(wrap);
+  const f = communityFilters;
+  let items = communityCache.slice();
+  if (f.country) items = items.filter(x => (x.country || '').trim() === f.country);
+  if (f.region) items = items.filter(x => (x.region || regionOf(x.country)) === f.region);
+  if (f.themes.length) items = items.filter(x => (x.themes || []).some(t => f.themes.includes(t)));
+  if (communitySort === 'recent') items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  else if (communitySort === 'top') items.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0) || (b.createdAt || 0) - (a.createdAt || 0));
+  else items.sort((a, b) => hotScore(b.likeCount, b.createdAt) - hotScore(a.likeCount, a.createdAt) || (b.likeCount || 0) - (a.likeCount || 0));
+  if (!items.length) {
+    wrap.appendChild(el('.empty', { style: { paddingTop: '24px' } }, [
+      el('.empty__emoji', { text: '📍' }),
+      el('div', { text: communityCache.length ? '沒有符合條件的行程' : '社群還沒有行程' }),
+      el('.tiny.muted-3', { style: { marginTop: '6px', lineHeight: '1.7' }, text: communityCache.length ? '試試其他篩選條件。' : '把你的行程設為「社群」，成為第一個分享的人！' }),
+    ]));
+    return;
+  }
+  const grid = el('.stagger'); items.forEach(it => grid.appendChild(communityCard(it))); wrap.appendChild(grid);
+}
+function communityCard(f) {
+  const bits = [];
+  if (f.country) bits.push(f.country);
+  const rg = f.region || regionOf(f.country); if (rg && rg !== f.country) bits.push(rg);
+  if (f.days) bits.push(f.days + ' 天');
+  if (f.cityCount) bits.push(f.cityCount + ' 城');
+  return el('.plan-card.plan-card--community', { onclick: () => openCommunityPreview(f) }, [
+    el('.plan-card__ico', { text: f.emoji || '🗺️' }),
+    el('.plan-card__body', {}, [
+      el('.plan-card__title', { text: f.title || '行程' }),
+      el('.plan-card__meta', {}, [bits.length ? el('span', { text: bits.join(' · ') }) : null]),
+      (f.themes && f.themes.length) ? el('.community-tags', {}, f.themes.slice(0, 3).map(t => el('span.chip.chip--mini', { text: t }))) : null,
+      el('.tiny.muted-3', { style: { marginTop: '4px' }, text: '由 ' + (f.ownerName || '旅人') + ' 分享' }),
+    ]),
+    el('.plan-card__actions', {}, [
+      likeButton(f),
+      el('button.iconbtn', { title: '複製到我的計劃', onclick: e => { e.stopPropagation(); forkFromFeed(f); } }, [icon('i-copy')]),
+    ]),
+  ]);
+}
+function likeButton(f) {
+  const liked = communityLiked.has(f.code);
+  const b = el('button.like-badge' + (liked ? '.is-on' : ''), { title: '按讚', onclick: e => { e.stopPropagation(); togglePlanLike(f, b); } }, [
+    el('span.like-badge__heart', { text: '♥' }),
+    el('span.like-badge__n', { text: String(f.likeCount || 0) }),
+  ]);
+  return b;
+}
+function setLikeUI(btn, liked, n) {
+  btn.classList.toggle('is-on', !!liked);
+  const c = btn.querySelector('.like-badge__n'); if (c) c.textContent = String(Math.max(0, n || 0));
+}
+async function togglePlanLike(f, btn) {
+  if (!fb.user) { toast('請先登入才能按讚'); return; }
+  if (btn.dataset.busy) return; btn.dataset.busy = '1';
+  const wasLiked = communityLiked.has(f.code);
+  const want = !wasLiked;
+  setLikeUI(btn, want, (f.likeCount || 0) + (want ? 1 : -1));   // optimistic
+  try {
+    const nowLiked = await feedLikeToggle(f.code, want);
+    if (nowLiked) communityLiked.add(f.code); else communityLiked.delete(f.code);
+    // Reconcile from the server so the displayed count can't drift across tabs/sessions.
+    try { const fresh = await feedGet(f.code); if (fresh && typeof fresh.likeCount === 'number') f.likeCount = fresh.likeCount; }
+    catch { f.likeCount = Math.max(0, (f.likeCount || 0) + (nowLiked === wasLiked ? 0 : (nowLiked ? 1 : -1))); }
+    setLikeUI(btn, nowLiked, f.likeCount);
+  } catch (e) {
+    setLikeUI(btn, wasLiked, f.likeCount || 0);   // revert
+    toast('操作失敗，請再試一次');
+  } finally { delete btn.dataset.busy; }
+}
+async function forkFromFeed(f) {
+  if (!fb.user) { toast('請先登入再複製到你的計劃'); return; }
+  toast('正在複製…');
+  let model = null; try { model = await collabModelGet(f.code); } catch {}
+  if (!model || !(model.days || []).length) { toast('此行程目前無法複製（可能已不公開）'); return; }
+  const id = createPlan({ title: (f.title || '社群行程') + '（社群副本）', model, base: 'fork', emoji: f.emoji || '🗺️' });
+  const arr = plansMeta(); const m = arr.find(p => p.id === id); if (m) { m.forkedFrom = f.code; setPlansMeta(arr); }
+  communityTab(false);
+  openPlan(id);
+  toast('已複製到你的計劃，可自由編輯 ✏️');
+}
+// Read-only preview of a community plan (no import) with a fork CTA.
+async function openCommunityPreview(f) {
+  const title = f.title || '社群行程';
+  $('#sheetTitle').textContent = title;
+  const b = clear($('#sheetBody'));
+  openSheet('sheet');
+  const bits = []; if (f.country) bits.push(f.country); const rg = f.region || regionOf(f.country); if (rg && rg !== f.country) bits.push(rg); if (f.days) bits.push(f.days + ' 天'); if (f.cityCount) bits.push(f.cityCount + ' 城');
+  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: (f.emoji || '🗺️') + ' ' + bits.join(' · ') + ' · 由 ' + (f.ownerName || '旅人') + ' 分享' }));
+  if (f.themes && f.themes.length) b.appendChild(el('.community-tags', { style: { margin: '8px 0' } }, f.themes.map(t => el('span.chip.chip--mini', { text: t }))));
+  b.appendChild(el('.tiny.muted-3', { style: { margin: '4px 0 8px' }, text: '👁 此為社群公開行程（唯讀）。複製到你的計劃後即可自由編輯。' }));
+  const loading = el('.tiny.muted-3', { style: { margin: '12px 0' }, text: '載入行程內容…' });
+  b.appendChild(loading);
+  let model = null; try { model = await collabModelGet(f.code); } catch {}
+  if ($('#sheetTitle').textContent !== title) return;   // sheet changed while awaiting
+  loading.remove();
+  const days = (model && model.days) || [];
+  if (!days.length) b.appendChild(el('.tiny.muted-3', { text: '無法載入內容，可能已不公開。' }));
+  else days.forEach((d, i) => {
+    b.appendChild(el('.h-section', { style: { margin: '14px 2px 6px' }, text: 'Day ' + (i + 1) + (d.title ? ' · ' + d.title : '') + (d.date ? '（' + d.date + '）' : '') }));
+    (d.items || []).forEach(it => b.appendChild(el('.preview-item', {}, [
+      el('span.preview-item__t', { text: it.time || '' }),
+      el('span.preview-item__x', { text: it.title || '' }),
+    ])));
+  });
+  b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '16px' }, onclick: () => { closeSheets(); forkFromFeed(f); } }, [icon('i-copy'), '複製到我的計劃（可編輯）']));
 }
 
 // ---- Account / Firebase ----
@@ -1971,6 +2238,7 @@ function scheduleCloudPush() {
 }
 let _syncing = false;
 async function onAuthChange(user) {
+  communityLoaded = false;   // auth changed → refresh feed + my-likes on next 社群 view
   if ($('#screen-plans') && !$('#screen-plans').hidden) renderPlans();
   if (!user) {
     // Clean logout: detach any live collaboration so stale-auth listeners can't error.
@@ -2039,6 +2307,8 @@ function init() {
     } else { openSettings(); }
   }));
   $('#plansSettingsBtn').addEventListener('click', openSettings);
+  // 我的計劃 / 社群 segmented toggle
+  $$('#plansSeg .plans-seg__btn').forEach(b => b.addEventListener('click', () => communityTab(b.dataset.seg === 'community')));
   // install / add to home screen
   const installBtn = $('#homeInstallBtn');
   if (installBtn) { if (pwaState().standalone) installBtn.style.display = 'none'; else installBtn.addEventListener('click', openInstallGuide); }

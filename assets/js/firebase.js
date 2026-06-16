@@ -131,6 +131,73 @@ export async function collabDelete(code) {
   if (!db) throw new Error('需登入雲端');
   await F.deleteDoc(F.doc(db, 'collab', code));
 }
+// Read just the itinerary model of a (public) collab doc — used to fork a community plan.
+export async function collabModelGet(code) {
+  if (!db) return null;
+  try { const s = await F.getDoc(F.doc(db, 'collab', code)); return s.exists() ? (s.data().model || null) : null; }
+  catch (e) { console.warn('collabModelGet', e); return null; }
+}
+
+// ---- Community feed (public mirror at feed/{code}; safe metadata only, never the model) ----
+// feed/{code} = { code,title,emoji,country,region,themes[],days,cityCount,summary,owner,ownerName,
+//                 visibility:'public'|'community', likeCount, createdAt, updatedAt }
+// Likes are one-per-user at feed/{code}/likes/{uid}; likeCount is denormalized (±1 via transaction).
+export function feedReady() { return !!db; }                 // browsing is public — needs db, not a user
+
+// Publish/refresh a plan to the community feed. `meta` is the safe metadata computed by the caller
+// (which owns the country→region map); ownership is also enforced server-side by the rules.
+export async function feedPublish(code, meta) {
+  if (!db) throw new Error('需登入雲端才能發佈');
+  if (!_user) throw new Error('請先登入');
+  let existing = null; try { existing = await feedGet(code); } catch {}
+  const payload = { ...meta, code, owner: _user.uid, updatedAt: Date.now() };
+  // Seed counters ONLY on first publish; on re-publish (merge) the server values are left untouched,
+  // so a metadata/tag edit can never clobber a concurrent like (F.increment) — no lost update.
+  if (!existing) { payload.likeCount = 0; payload.createdAt = Date.now(); }
+  await F.setDoc(F.doc(db, 'feed', code), payload, { merge: true });
+}
+export async function feedUnpublish(code) {
+  if (!db) throw new Error('需登入雲端');
+  try { await F.deleteDoc(F.doc(db, 'feed', code)); } catch (e) { console.warn('feedUnpublish', e); }
+}
+export async function feedGet(code) {
+  if (!db) return null;
+  try { const s = await F.getDoc(F.doc(db, 'feed', code)); return s.exists() ? s.data() : null; }
+  catch { return null; }
+}
+// One read of ≤max feed docs. Every doc in feed/ is already public/community (private/link are
+// never mirrored), so we order by createdAt only — no composite index needed. Sorting/filtering
+// is done client-side so toggling is instant and free.
+export async function feedList(max = 60) {
+  if (!db) return [];
+  try {
+    const q = F.query(F.collection(db, 'feed'), F.orderBy('createdAt', 'desc'), F.limit(max));
+    const snap = await F.getDocs(q);
+    return snap.docs.map(d => d.data());
+  } catch (e) { console.warn('feedList', e); return []; }
+}
+// Atomic, idempotent like toggle: writes the per-user like doc AND the ±1 counter in one transaction.
+export async function feedLikeToggle(code, like) {
+  if (!db || !_user) throw new Error('請先登入再按讚');
+  const likeRef = F.doc(db, 'feed', code, 'likes', _user.uid);
+  const feedRef = F.doc(db, 'feed', code);
+  return await F.runTransaction(db, async tx => {
+    const has = (await tx.get(likeRef)).exists();
+    if (like && !has) { tx.set(likeRef, { uid: _user.uid, ts: Date.now() }); tx.update(feedRef, { likeCount: F.increment(1) }); return true; }
+    if (!like && has) { tx.delete(likeRef); tx.update(feedRef, { likeCount: F.increment(-1) }); return false; }
+    return has;   // already in desired state — no write
+  });
+}
+// Which of these codes the signed-in user has liked (one parallel point-read per visible code;
+// N reads, acceptable at the current ≤60-card scale — denormalize later if the feed grows large).
+export async function feedLikedSet(codes) {
+  const out = new Set();
+  if (!db || !_user || !codes || !codes.length) return out;
+  await Promise.all(codes.map(async code => {
+    try { if ((await F.getDoc(F.doc(db, 'feed', code, 'likes', _user.uid))).exists()) out.add(code); } catch {}
+  }));
+  return out;
+}
 export function collabOnDoc(code, cb) {
   if (!db) return () => {};
   try { return F.onSnapshot(F.doc(db, 'collab', code), s => { if (s.exists()) cb(s.data()); }, () => {}); } catch { return () => {}; }
