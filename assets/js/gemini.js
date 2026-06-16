@@ -33,7 +33,7 @@ function systemText() {
   return `你是「九州旅伴」— 一位專業、親切、簡潔的日本九州・本州自由行 AI 助理，使用繁體中文回答。
 你掌握使用者的完整 8 日行程（如下）。回答要具體、可執行；提到車次/時間時提醒以即時 Google Maps/JR 官方為準。
 你可以呼叫工具：get_status 取得使用者目前時間/位置/現在與下一個行程；get_weather 查即時天氣。
-${agentOn ? '【代理模式開啟】你能操控 App：navigate 切換分頁、open_day 顯示某天、show_on_map 在地圖標出地點、open_google_maps 開啟導航、show_souvenirs 顯示伴手禮、find_hotels 找附近飯店。\n你也能「直接幫使用者調整行程」：add_activity 新增、remove_activity 刪除、update_activity 改時間/名稱、move_activity 把活動移到別天、reset_plan 還原。當使用者反映行程有問題（某天太累、想換時間、想加/刪景點、想把 X 移到 Y 天、下雨想改室內）時，主動用這些工具幫他改好，改完呼叫 open_day 顯示那天，並用一句話說明你做了什麼調整。多項調整可連續呼叫多個工具。' : '【代理模式關閉】僅以文字回答；若使用者想調整行程，建議他開啟上方代理模式，你就能直接幫他改。'}
+${agentOn ? '【代理模式開啟】你能操控 App：navigate 切換分頁、open_day 顯示某天、show_on_map 在地圖標出地點、open_google_maps 開啟導航、show_souvenirs 顯示伴手禮、find_hotels 找附近飯店。\n你也能「直接幫使用者調整行程」：add_activity 新增、remove_activity 刪除、update_activity 改時間/名稱、move_activity 把活動移到別天、reset_plan 還原、new_plan 建立一份全新計劃。當使用者反映行程有問題（某天太累、想換時間、想加/刪景點、想把 X 移到 Y 天、下雨想改室內），或說「幫我規劃一個新行程」時，主動用這些工具幫他改好/建立，改完呼叫 open_day 顯示那天，並用一句話說明你做了什麼。多項調整可連續呼叫多個工具。' : '【代理模式關閉】僅以文字回答；若使用者想調整行程，建議他開啟上方代理模式，你就能直接幫他改。'}
 回答控制在 3–6 句，善用條列。\n\n${tripContext()}`;
 }
 
@@ -53,7 +53,8 @@ const CONTROL_TOOLS = [
   { name: 'remove_activity', description: '刪除某天的某個活動（以名稱比對）。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' } }, required: ['day', 'title'] } },
   { name: 'update_activity', description: '修改某天某活動的時間/名稱/備註。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' }, newTime: { type: 'string' }, newTitle: { type: 'string' }, desc: { type: 'string' } }, required: ['day', 'title'] } },
   { name: 'move_activity', description: '把某活動移到另一天/時間。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' }, toDay: { type: 'integer' }, time: { type: 'string' } }, required: ['day', 'title', 'toDay'] } },
-  { name: 'reset_plan', description: '把行程還原成原始規劃。', parameters: { type: 'object', properties: {} } },
+  { name: 'reset_plan', description: '把目前行程還原成原始規劃。', parameters: { type: 'object', properties: {} } },
+  { name: 'new_plan', description: '建立一份全新的行程計劃（從九州範本複製）並開啟，之後可用其他工具繼續編輯。', parameters: { type: 'object', properties: { title: { type: 'string', description: '計劃名稱' } } } },
 ];
 
 function resolveCity(name = '') {
@@ -88,6 +89,7 @@ async function execTool(call) {
       case 'update_activity': { const r = API.planUpdate(a); return { label: `調整「${a.title}」`, result: r }; }
       case 'move_activity': { const r = API.planMove(a); return { label: `移動「${a.title}」到第 ${a.toDay} 天`, result: r }; }
       case 'reset_plan': { const r = API.planReset(); return { label: '還原原始行程', result: r }; }
+      case 'new_plan': { const r = API.newPlan ? API.newPlan(a.title) : { ok: false }; return { label: `建立新計劃${a.title ? `「${a.title}」` : ''}`, result: r }; }
       default: return { label: call.name, result: { error: 'unknown tool' } };
     }
   } catch (e) { return { label: call.name, result: { error: String(e) } }; }

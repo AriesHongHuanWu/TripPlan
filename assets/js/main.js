@@ -11,6 +11,7 @@ import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.
 import { initMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
 import { initGemini, getCfg } from './gemini.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
+import { initFirebase, fb, signInGoogle, signOutUser, pullUserData, pushUserData, shareSave, shareGet } from './firebase.js';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -288,7 +289,7 @@ function findItem(i, title) {
   return idx;
 }
 function sortDay(i) { DAYS[i].items.sort((a, b) => parseHM(a.time) - parseHM(b.time)); }
-function finishEdit(i) { sortDay(i); savePlan(); selectDay(i); if (currentTab !== 'plan') goTab('plan'); if (currentTab === 'today') renderToday(); }
+function finishEdit(i) { sortDay(i); savePlan(); selectDay(i); if (currentTab !== 'plan') goTab('plan'); if (currentTab === 'today') renderToday(); snapshotCurrent(); scheduleCloudPush(); }
 
 function planAdd({ day, time, title, type = 'see', desc = '', lat, lng }) {
   const i = clampDay(day); if (i < 0) return { ok: false, msg: '天數需為 1–8' };
@@ -805,11 +806,214 @@ function hideSplash() {
   setTimeout(() => { sp.classList.add('hide'); setTimeout(() => sp.remove(), 600); }, 750);
 }
 
+// ============================================================================
+// Multi-plan platform: Home → Plans → App. Kyushu is an immutable TEMPLATE;
+// each plan is a saved snapshot (reuses exportAll/importAll). Firestore mirror.
+// ============================================================================
+let currentPlanId = null;
+let cloudTimer = null;
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const plansMeta = () => store.get('kp_plans', []);
+const setPlansMeta = a => store.set('kp_plans', a);
+function fmtAgo(ts) {
+  if (!ts) return '剛剛'; const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return '剛剛'; if (m < 60) return m + ' 分鐘前'; const h = Math.floor(m / 60);
+  if (h < 24) return h + ' 小時前'; return Math.floor(h / 24) + ' 天前';
+}
+
+function showScreen(name) {
+  ['home', 'plans'].forEach(s => { const e = $('#screen-' + s); if (e) e.hidden = name !== s; });
+  const app = $('#app'); if (app) app.hidden = name !== 'app';
+  if (name !== 'app') closeSheets();
+  if (name === 'home') renderHome();
+  if (name === 'plans') renderPlans();
+  window.scrollTo({ top: 0 });
+}
+
+function templateSnapshot() { return { v: 2, ts: Date.now(), data: {} }; }   // empty data = base Kyushu
+
+function resetToBase() {
+  DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...JSON.parse(JSON.stringify(BASE_ITEMS[i]))));
+  SYNC_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+  planCustomized = false;
+}
+function loadPlanState(id) { resetToBase(); const data = store.get('kp_state:' + id, null); if (data) importAll(data); }
+function snapshotCurrent() {
+  if (!currentPlanId) return;
+  store.set('kp_state:' + currentPlanId, exportAll());
+  const arr = plansMeta(); const m = arr.find(p => p.id === currentPlanId); if (m) { m.updatedAt = Date.now(); setPlansMeta(arr); }
+}
+
+function createPlan({ title, fromData = null } = {}) {
+  const id = uid();
+  const arr = plansMeta();
+  arr.unshift({ id, title: title || '九州・瀨戶內・關西', emoji: '🗾', base: 'kyushu', createdAt: Date.now(), updatedAt: Date.now() });
+  setPlansMeta(arr);
+  store.set('kp_state:' + id, fromData || templateSnapshot());
+  scheduleCloudPush();
+  return id;
+}
+function openPlan(id) {
+  if (!plansMeta().some(p => p.id === id)) return;
+  snapshotCurrent();
+  currentPlanId = id; store.set('kp_current', id);
+  loadPlanState(id);
+  const todayEntry = dayByDate[ymd(new Date())]; selectedDay = todayEntry ? todayEntry.index : 0;
+  renderToday(); renderDayPicker(); renderDayDetail(selectedDay);
+  buildWeatherPicker(); renderWeatherHero(); renderWeatherCity(wxCity, $('#wxRoot'));
+  buildGiftPicker(); renderGifts();
+  updateAppbarTitle();
+  goTab('today'); showScreen('app');
+}
+function updateAppbarTitle() { const m = plansMeta().find(p => p.id === currentPlanId); if (m) { const t = $('#appbarTitle'); if (t) t.textContent = m.title; } }
+function deletePlan(id) {
+  let arr = plansMeta().filter(p => p.id !== id); setPlansMeta(arr);
+  try { localStorage.removeItem('kp_state:' + id); } catch {}
+  if (currentPlanId === id) { currentPlanId = arr[0] ? arr[0].id : null; store.set('kp_current', currentPlanId); if (currentPlanId) loadPlanState(currentPlanId); }
+  scheduleCloudPush(); renderPlans();
+}
+function renamePlan(id, title) { const arr = plansMeta(); const m = arr.find(p => p.id === id); if (m && title) { m.title = title; setPlansMeta(arr); updateAppbarTitle(); scheduleCloudPush(); renderPlans(); } }
+
+// AI creates a new plan then jumps to chat to arrange it
+function aiNewPlan(title) { const id = createPlan({ title: title || '新行程' }); openPlan(id); goTab('ai'); toast('已建立新行程，跟 AI 說你想怎麼安排'); return { ok: true, msg: '已建立新行程「' + (title || '新行程') + '」並開啟' }; }
+
+// ---- Sharing (Firebase if signed in, else Cloudflare KV) ----
+async function sharePlan(id) {
+  if (id === currentPlanId) snapshotCurrent();
+  const data = store.get('kp_state:' + id, templateSnapshot());
+  const m = plansMeta().find(p => p.id === id); const payload = { meta: { title: m ? m.title : '行程', emoji: m ? m.emoji : '🗾' }, state: data };
+  const code = uid();
+  try {
+    if (fb.configured && fb.user) await shareSave(code, payload);
+    else {
+      const res = await fetch('/api/plan?code=' + code, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (res.status === 501) return toast('分享需設定雲端（Firebase 或 Cloudflare KV）');
+      if (!res.ok) return toast('分享失敗（' + res.status + '）');
+    }
+    const link = location.origin + location.pathname + '?plan=' + code;
+    try { await navigator.clipboard.writeText(link); toast('分享連結已複製 · 碼 ' + code); } catch { toast('分享碼：' + code); }
+  } catch (e) { toast('分享失敗：' + e.message); }
+}
+async function importSharedCode(code) {
+  if (!code) return;
+  try {
+    let payload = null;
+    if (fb.configured && fb.user) payload = await shareGet(code);
+    if (!payload) { const res = await fetch('/api/plan?code=' + encodeURIComponent(code)); if (res.ok) payload = await res.json(); }
+    if (!payload) return toast('找不到此分享碼');
+    const state = payload.state || payload;           // tolerate raw state
+    const title = (payload.meta && payload.meta.title) || '共享的行程';
+    const newId = createPlan({ title: title + '（共享）', fromData: state });
+    openPlan(newId); toast('已載入共享行程');
+  } catch (e) { toast('載入失敗：' + e.message); }
+}
+function importSharedFromURL() {
+  const c = new URLSearchParams(location.search).get('plan');
+  if (c) { history.replaceState(null, '', location.pathname); importSharedCode(c); return true; }
+  return false;
+}
+
+// ---- Home / Plans rendering ----
+function renderHome() {
+  const f = $('#homeFeatures');
+  if (f && !f.children.length) {
+    [['🗺️', '完整行程規劃', '逐日時間軸、JR 路線與 Google 導航'],
+     ['🤖', 'AI 旅伴', '用講的就能調整行程、查天氣、找飯店'],
+     ['☁️', '自動雲端儲存', '登入後跨裝置同步，並可與同行者共享']]
+      .forEach(([e, t, d]) => f.appendChild(el('.home-feat', {}, [el('.home-feat__ic', { text: e }), el('div', {}, [el('.home-feat__t', { text: t }), el('.home-feat__d', { text: d })])])));
+  }
+  const gBtn = $('#googleSignIn'), note = $('#homeNote');
+  if (gBtn) gBtn.style.display = fb.configured ? '' : 'none';
+  if (note) note.textContent = fb.configured ? '' : '（尚未連接 Firebase；可先「試用」，資料存在本機。設定後即可 Google 登入與雲端同步）';
+}
+function renderPlans() {
+  const list = $('#plansList'); if (!list) return; clear(list);
+  const metas = plansMeta();
+  if (!metas.length) list.appendChild(el('.empty', {}, [el('.empty__emoji', { text: '🧳' }), el('div', { text: '還沒有任何行程' }), el('.tiny.muted', { style: { marginTop: '6px' }, text: '從下方範本建立你的第一份行程！' })]));
+  metas.forEach(m => list.appendChild(planCard(m)));
+  const tl = $('#templateList'); if (tl) { clear(tl); tl.appendChild(templateCard()); }
+  const lbl = $('#plansUserLabel'); if (lbl) lbl.textContent = fb.user ? ((fb.user.displayName || fb.user.email) + ' · 已同步') : (fb.configured ? '未登入 · 本機儲存' : '本機儲存');
+  const authBtn = $('#plansAuthBtn'); if (authBtn) authBtn.title = fb.user ? '帳號（已登入）' : '登入';
+}
+function planCard(m) {
+  return el('.plan-card', { onclick: () => openPlan(m.id) }, [
+    el('.plan-card__ico', { text: m.emoji || '🗺️' }),
+    el('.plan-card__body', {}, [
+      el('.plan-card__title', { text: m.title }),
+      el('.plan-card__meta', {}, [m.id === currentPlanId ? el('span.plan-badge', { text: '目前' }) : null, el('span', { text: '更新 ' + fmtAgo(m.updatedAt) })]),
+    ]),
+    el('.plan-card__actions', {}, [
+      el('button.iconbtn', { title: '分享', onclick: e => { e.stopPropagation(); sharePlan(m.id); } }, [icon('i-share')]),
+      el('button.iconbtn', { title: '重新命名', onclick: e => { e.stopPropagation(); const t = prompt('行程名稱', m.title); if (t) renamePlan(m.id, t.trim()); } }, [icon('i-plan')]),
+      el('button.iconbtn', { title: '刪除', onclick: e => { e.stopPropagation(); if (confirm('刪除「' + m.title + '」？此動作無法復原。')) deletePlan(m.id); } }, [icon('i-trash')]),
+    ]),
+  ]);
+}
+function templateCard() {
+  const card = el('.plan-card.plan-card--tpl', { onclick: () => { const id = createPlan({ title: '九州・瀨戶內・關西' }); openPlan(id); toast('已從範本建立新行程'); } }, [
+    el('.plan-card__ico', { text: '🗾' }),
+    el('.plan-card__body', {}, [el('.plan-card__title', { text: '九州・瀨戶內・關西 8 日' }), el('.plan-card__meta', {}, [el('span.plan-badge.plan-badge--tpl', { text: '範本' }), el('span', { text: '點此複製一份來編輯' })])]),
+    el('.plan-card__actions', {}, [el('button.iconbtn', { title: '用 AI 建立', onclick: e => { e.stopPropagation(); aiNewPlan('九州行程'); } }, [icon('i-ai')])]),
+  ]);
+  // also a "load shared" entry
+  const loadShared = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => { const c = prompt('輸入分享碼或貼上分享連結'); if (c) importSharedCode(c.includes('plan=') ? c.split('plan=')[1] : c.trim()); } }, [
+    el('.plan-card__ico', { text: '🔗' }),
+    el('.plan-card__body', {}, [el('.plan-card__title', { text: '載入共享行程' }), el('.plan-card__meta', {}, [el('span', { text: '用同行者給的分享碼／連結' })])]),
+  ]);
+  const wrap = el('div', {}, [card, loadShared]);
+  return wrap;
+}
+
+// ---- Account / Firebase ----
+function ensurePlans() {
+  let metas = plansMeta();
+  if (!metas.length) {
+    const id = uid();
+    setPlansMeta([{ id, title: '九州・瀨戶內・關西', emoji: '🗾', base: 'kyushu', createdAt: Date.now(), updatedAt: Date.now() }]);
+    store.set('kp_state:' + id, exportAll());     // migrate any existing on-device data into plan #1
+    currentPlanId = id; store.set('kp_current', id);
+  } else {
+    currentPlanId = store.get('kp_current', metas[0].id);
+    if (!metas.some(p => p.id === currentPlanId)) currentPlanId = metas[0].id;
+  }
+  loadPlanState(currentPlanId);
+  updateAppbarTitle();
+}
+function allCloudData() {
+  const o = {};
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('kp_') && k !== 'kp_gemini_key' && k !== 'kp_theme' && k !== 'kp_synccode') o[k] = localStorage.getItem(k); }
+  return o;
+}
+function scheduleCloudPush() {
+  if (!fb.user) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(() => { snapshotCurrent(); pushUserData({ keys: allCloudData() }).catch(() => {}); }, 1500);
+}
+async function onAuthChange(user) {
+  const homeNote = $('#homeNote');
+  if ($('#screen-plans') && !$('#screen-plans').hidden) renderPlans();
+  if (!user) return;
+  // signed in → pull cloud; cloud wins if it has data, else push local up
+  try {
+    const cloud = await pullUserData();
+    if (cloud && cloud.keys && cloud.keys.kp_plans) {
+      Object.entries(cloud.keys).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch {} });
+      ensurePlans();
+      if (!$('#app').hidden) openPlan(currentPlanId); else renderPlans();
+      toast('已從你的帳號載入行程');
+    } else {
+      await pushUserData({ keys: allCloudData() });
+    }
+  } catch (e) { console.warn('cloud sync', e); }
+  renderPlans();
+}
+
 // ---------- Init ----------
 function init() {
   initTheme();
   captureBase();
-  loadPlan();
+  ensurePlans();
 
   // tabs
   $$('.tab').forEach(t => t.addEventListener('click', () => goTab(t.dataset.tab)));
@@ -820,6 +1024,16 @@ function init() {
   $('#searchBtn').addEventListener('click', openSearch);
   $('#searchClose').addEventListener('click', closeSheets);
   $('#searchInput').addEventListener('input', e => renderSearch(e.target.value));
+  // plans / account
+  $('#plansBtn').addEventListener('click', () => { snapshotCurrent(); showScreen('plans'); });
+  $('#guestEnter').addEventListener('click', () => { store.set('kp_entered', true); showScreen('plans'); });
+  $('#googleSignIn').addEventListener('click', async () => { store.set('kp_entered', true); try { await signInGoogle(); showScreen('plans'); } catch (e) { toast('登入失敗：' + e.message); } });
+  $('#plansAuthBtn').addEventListener('click', async () => {
+    if (fb.user) { if (confirm('登出帳號？（本機資料會保留）')) { await signOutUser(); renderPlans(); } }
+    else if (fb.configured) { try { await signInGoogle(); } catch (e) { toast('登入失敗：' + e.message); } }
+    else { openSettings(); }
+  });
+  $('#plansSettingsBtn').addEventListener('click', openSettings);
   // sheets
   $('#scrim').addEventListener('click', closeSheets);
   $('#sheetClose').addEventListener('click', closeSheets);
@@ -844,7 +1058,7 @@ function init() {
   geminiCtl = initGemini({
     status, goTab, openDay, showOnMap, goWeather, goSouvenirs,
     openMaps: url => window.open(url, '_blank', 'noopener'),
-    planAdd, planRemove, planUpdate, planMove, planReset,
+    planAdd, planRemove, planUpdate, planMove, planReset, newPlan: aiNewPlan,
   });
 
   // toolkit (錦囊) + motion
@@ -862,6 +1076,15 @@ function init() {
 
   // service worker (offline / installable)
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+  // firebase (guarded) + persist on exit
+  initFirebase().then(() => fb.onAuth(onAuthChange));
+  window.addEventListener('beforeunload', () => { try { snapshotCurrent(); } catch {} });
+
+  // initial screen: shared link → plans (loads into app); else app if returning, home if first time
+  const hadShare = importSharedFromURL();
+  if (hadShare) store.set('kp_entered', true);
+  showScreen(hadShare ? 'plans' : (store.get('kp_entered', false) ? 'app' : 'home'));
 }
 
 document.addEventListener('DOMContentLoaded', init);

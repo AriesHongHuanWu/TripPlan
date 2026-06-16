@@ -648,6 +648,36 @@ main {
 .wear-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: var(--r-pill); background: rgba(255,255,255,.18); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-size: 12.5px; font-weight: 600; }
 .wx-today__tip { font-size: 12px; opacity: .9; margin-top: 10px; line-height: 1.5; }
 
+/* ========================================================================
+   SCREENS: Home (login) + Plans (list)
+   ====================================================================== */
+.screen { animation: fadeUp .35s var(--ease) both; }
+.home { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 32px 22px calc(40px + var(--safe-b)); }
+.home__logo { width: 76px; height: 76px; border-radius: 22px; background: var(--grad-brand); display: grid; place-items: center; box-shadow: var(--shadow-3); margin-bottom: 20px; }
+.home__logo svg { width: 42px; height: 42px; }
+.home__eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .18em; color: var(--brand-2); }
+.home__title { font-size: 34px; font-weight: 800; letter-spacing: -.03em; margin-top: 6px; }
+.home__sub { font-size: 15px; color: var(--text-2); margin-top: 10px; line-height: 1.6; }
+.home__features { margin: 24px 0; display: flex; flex-direction: column; gap: 14px; }
+.home-feat { display: flex; gap: 12px; align-items: flex-start; }
+.home-feat__ic { width: 38px; height: 38px; border-radius: 11px; background: var(--surface-2); display: grid; place-items: center; font-size: 19px; flex: none; }
+.home-feat__t { font-weight: 650; font-size: 14.5px; }
+.home-feat__d { font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
+
+.plans-main { max-width: var(--maxw); margin: 0 auto; padding: 16px 16px calc(40px + var(--safe-b)); }
+.plan-card { display: flex; align-items: center; gap: 14px; padding: 15px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); margin-bottom: 12px; transition: transform .18s var(--ease), box-shadow .25s var(--ease); cursor: pointer; }
+.plan-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.plan-card:active { transform: scale(.99); }
+.plan-card__ico { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; flex: none; background: var(--surface-2); }
+.plan-card__body { flex: 1; min-width: 0; }
+.plan-card__title { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-card__meta { font-size: 12px; color: var(--text-3); margin-top: 3px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.plan-card__actions { display: flex; gap: 2px; flex: none; }
+.plan-card--tpl { border-style: dashed; border-color: var(--line-strong); background: transparent; box-shadow: none; }
+.plan-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--brand-2) 14%, transparent); color: var(--brand-2); }
+.plan-badge--tpl { background: color-mix(in srgb, var(--gold) 18%, transparent); color: #a36c00; }
+[data-theme="dark"] .plan-badge--tpl { color: var(--gold); }
+
 @media (min-width: 600px) {
   body { font-size: 15.5px; }
   #leafmap { height: 60vh; }
