@@ -261,6 +261,25 @@ function importPlanObj(obj) {
   DAYS.forEach((d, i) => d.items.splice(0, d.items.length, ...(obj.days[i].items || obj.days[i])));
   savePlan(); return true;
 }
+
+// Full-state sync: itinerary + favorites + checklist + bookings + expenses + budget + rate.
+// Deliberately EXCLUDES kp_gemini_key (secret) and kp_theme (device preference).
+const SYNC_KEYS = ['kp_plan', 'kp_favs', 'kp_packing', 'kp_bookings', 'kp_expenses', 'kp_budgetcfg', 'kp_rate'];
+function exportAll() {
+  const data = {};
+  SYNC_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) data[k] = v; });
+  return { v: 2, ts: Date.now(), title: TRIP.title, data };
+}
+function importAll(obj) {
+  if (!obj) return false;
+  if (obj.v === 2 && obj.data) {
+    Object.entries(obj.data).forEach(([k, v]) => { if (SYNC_KEYS.includes(k)) { try { localStorage.setItem(k, v); } catch {} } });
+  } else if (obj.v === 1 && Array.isArray(obj.days)) {       // legacy: itinerary-only blob
+    store.set('kp_plan', { v: 1, ts: Date.now(), days: obj.days.map(d => d.items || d) });
+  } else return false;
+  loadPlan();   // re-apply itinerary to DAYS
+  return true;
+}
 function clampDay(day) { const i = (parseInt(day, 10) || 0) - 1; return (i >= 0 && i < DAYS.length) ? i : -1; }
 function findItem(i, title) {
   const items = DAYS[i].items, t = (title || '').trim();
@@ -315,10 +334,10 @@ function getSyncCode() { let c = store.get('kp_synccode', null); if (!c) { c = M
 async function cloudUpload() {
   const c = getSyncCode();
   try {
-    const res = await fetch('/api/plan?code=' + encodeURIComponent(c), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportPlanObj()) });
+    const res = await fetch('/api/plan?code=' + encodeURIComponent(c), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportAll()) });
     if (res.status === 501) return toast('雲端未設定：請先在 Cloudflare 綁定 KV');
     if (!res.ok) return toast('上傳失敗（' + res.status + '）');
-    toast('已上傳雲端 · 分享碼 ' + c);
+    toast('已上傳全部資料 · 分享碼 ' + c);
   } catch (e) { toast('上傳失敗：' + e.message); }
 }
 async function cloudLoad(c) {
@@ -329,7 +348,7 @@ async function cloudLoad(c) {
     if (res.status === 501) return toast('雲端未設定：請先在 Cloudflare 綁定 KV');
     if (!res.ok) return toast('載入失敗（' + res.status + '）');
     const obj = await res.json();
-    if (importPlanObj(obj)) { store.set('kp_synccode', c); selectDay(selectedDay); if (currentTab === 'today') renderToday(); toast('已從雲端載入行程'); closeSheets(); }
+    if (importAll(obj)) { store.set('kp_synccode', c); selectDay(selectedDay); if (currentTab === 'today') renderToday(); toast('已從雲端載入全部資料'); closeSheets(); }
     else toast('資料格式不符');
   } catch (e) { toast('載入失敗：' + e.message); }
 }
@@ -731,7 +750,7 @@ function openSettings() {
   body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 10px', lineHeight: '1.6' }, text: (planCustomized ? '你已自訂行程（自動存在本機）。' : '行程可手動或由 AI 調整，變更自動存在本機。') + ' 在「行程」分頁點「編輯行程」可增刪改；或到「AI」分頁叫旅伴幫你改。' }));
   body.appendChild(el('button.btn.btn--block', { onclick: () => { const r = planReset(); toast(r.msg); closeSheets(); } }, ['↩︎ 還原原始行程']));
   const syncCode = getSyncCode();
-  body.appendChild(el('p', { class: 'tiny muted-3', style: { margin: '14px 0 6px', lineHeight: '1.6' }, text: '雲端同步（選用，需在 Cloudflare 綁定 KV）：把行程存到雲端，換裝置或與同行者用同一組分享碼共用。' }));
+  body.appendChild(el('p', { class: 'tiny muted-3', style: { margin: '14px 0 6px', lineHeight: '1.6' }, text: '雲端同步（選用，需在 Cloudflare 綁定 KV）：會同步「整份資料」— 行程、收藏、打包清單、我的預訂、花費紀錄、預算與匯率；不含 Gemini 金鑰與深淺色偏好。換裝置或與同行者用同一組分享碼共用。⚠️ 從雲端載入會覆蓋本機現有資料。' }));
   body.appendChild(el('label', { class: 'tiny muted-3', text: '我的分享碼' }));
   body.appendChild(el('input', { value: syncCode, readonly: 'readonly', style: inputStyle() }));
   body.appendChild(el('.grid2', { style: { marginTop: '10px' } }, [
