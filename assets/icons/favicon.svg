@@ -1,23 +1,14 @@
 <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6366f1"/>
-      <stop offset="0.5" stop-color="#2563eb"/>
-      <stop offset="1" stop-color="#06b6d4"/>
+      <stop offset="0" stop-color="#6d4bff"/>
+      <stop offset="0.55" stop-color="#3b6ef6"/>
+      <stop offset="1" stop-color="#22b8cf"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#g)"/>
-  <g fill="#ffffff">
-    <!-- kasagi (top curved beam) -->
-    <path d="M120 150 q136 -34 272 0 l0 30 q-136 -30 -272 0 z"/>
-    <!-- gakuzuka (center tablet) -->
-    <rect x="244" y="178" width="24" height="34" rx="4"/>
-    <!-- nuki (second beam) -->
-    <rect x="156" y="212" width="200" height="24" rx="6"/>
-    <!-- posts -->
-    <rect x="176" y="188" width="30" height="200" rx="6"/>
-    <rect x="306" y="188" width="30" height="200" rx="6"/>
-  </g>
-  <!-- location pin dot -->
-  <circle cx="256" cy="408" r="20" fill="#ff5d8f"/>
+  <rect width="512" height="512" rx="116" fill="url(#g)"/>
+  <!-- location pin (Plan AI: a planned destination) -->
+  <path d="M256 116c-62 0-112 50-112 112 0 80 112 184 112 184s112-104 112-184c0-62-50-112-112-112z" fill="#ffffff" opacity="0.97"/>
+  <!-- AI sparkle core (the gradient shows through) -->
+  <path d="M256 168l22 50 50 22-50 22-22 50-22-50-50-22 50-22z" fill="url(#g)"/>
 </svg>

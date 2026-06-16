@@ -680,6 +680,33 @@ function showOnMap(place) { goTab('route'); setRouteSeg('map'); ensureMap(); ref
 function openSheet(id) { $('#scrim').classList.add('is-open'); $('#' + id).classList.add('is-open'); }
 function closeSheets() { $('#scrim').classList.remove('is-open'); ['#sheet', '#settingsSheet', '#toolkitSheet', '#searchSheet'].forEach(s => { const e = $(s); if (e) e.classList.remove('is-open'); }); }
 
+// In-app dialogs (replace native confirm()/prompt() — looks professional, stays in-app).
+function appDialog({ title = '', message = '', confirmText = '確定', cancelText = '取消', danger = false, promptValue = null, placeholder = '' } = {}) {
+  return new Promise(resolve => {
+    let inputEl = null;
+    const done = val => { ov.classList.remove('is-on'); setTimeout(() => { try { ov.remove(); } catch {} }, 200); document.removeEventListener('keydown', onKey); resolve(val); };
+    const onConfirm = () => done(promptValue !== null ? ((inputEl.value || '').trim() || null) : true);
+    const onCancel = () => done(promptValue !== null ? null : false);
+    const onKey = e => { if (e.key === 'Escape') onCancel(); else if (e.key === 'Enter' && promptValue !== null) { e.preventDefault(); onConfirm(); } };
+    if (promptValue !== null) inputEl = el('input', { value: promptValue, placeholder, style: inputStyle(), onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); onConfirm(); } } });
+    const card = el('.app-dialog__card', {}, [
+      title ? el('.app-dialog__title', { text: title }) : null,
+      message ? el('p', { class: 'app-dialog__msg', text: message }) : null,
+      inputEl,
+      el('.app-dialog__actions', {}, [
+        el('button.btn', { onclick: onCancel }, [cancelText]),
+        el('button' + (danger ? '.btn.btn--danger' : '.btn.btn--brand'), { onclick: onConfirm }, [confirmText]),
+      ]),
+    ]);
+    const ov = el('.app-dialog', { onclick: e => { if (e.target === ov) onCancel(); } }, [card]);
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', onKey);
+    requestAnimationFrame(() => { ov.classList.add('is-on'); if (inputEl) { inputEl.focus(); inputEl.select(); } });
+  });
+}
+const confirmDialog = opts => appDialog(opts);                                            // → true / false
+const promptDialog = opts => appDialog({ ...opts, promptValue: opts.value != null ? opts.value : '' }); // → string / null
+
 // ---------- Global search ----------
 let searchIndex = null;
 function buildSearchIndex() {
@@ -1272,7 +1299,7 @@ async function openShareSheet(id) {
   b.appendChild(el('.tiny.muted-3', { style: { margin: '18px 0 6px', fontWeight: '700' }, text: '可存取的人' }));
   b.appendChild(el('p', { class: 'tiny muted-3', style: { lineHeight: '1.7', margin: '0 0 10px' }, text: '任何拿到上面連結／分享碼的人，都能載入一份「自己的可編輯副本」。對方的修改不會影響你的版本。' }));
   b.appendChild(el('button.btn.btn--block', { style: { color: 'var(--sakura)' }, onclick: async () => {
-    if (!confirm('關閉這個邀請連結？已加入的人手上的副本會保留，但這條連結／分享碼將失效，需要時可重新產生新的。')) return;
+    if (!await confirmDialog({ title: '關閉邀請連結', message: '已加入的人手上的副本會保留，但這條連結／分享碼將失效，需要時可重新產生新的。', confirmText: '關閉連結', danger: true })) return;
     await revokeShare(id); closeSheets(); toast('已關閉邀請連結');
   } }, [icon('i-trash'), '關閉此邀請連結']));
 }
@@ -1440,8 +1467,8 @@ function planCard(m) {
     el('.plan-card__actions', {}, [
       el('button.iconbtn', { title: '匯出（PDF／行事曆／備份）', onclick: e => { e.stopPropagation(); openExportSheet(m.id); } }, [icon('i-install')]),
       el('button.iconbtn', { title: '邀請朋友', onclick: e => { e.stopPropagation(); openShareSheet(m.id); } }, [icon('i-share')]),
-      el('button.iconbtn', { title: '重新命名', onclick: e => { e.stopPropagation(); const t = prompt('行程名稱', m.title); if (t) renamePlan(m.id, t.trim()); } }, [icon('i-plan')]),
-      el('button.iconbtn', { title: '刪除', onclick: e => { e.stopPropagation(); if (confirm('刪除「' + m.title + '」？此動作無法復原。')) deletePlan(m.id); } }, [icon('i-trash')]),
+      el('button.iconbtn', { title: '重新命名', onclick: async e => { e.stopPropagation(); const t = await promptDialog({ title: '重新命名行程', value: m.title, placeholder: '行程名稱', confirmText: '儲存' }); if (t) renamePlan(m.id, t.trim()); } }, [icon('i-plan')]),
+      el('button.iconbtn', { title: '刪除', onclick: async e => { e.stopPropagation(); if (await confirmDialog({ title: '刪除行程', message: '刪除「' + m.title + '」？此動作無法復原。', confirmText: '刪除', danger: true })) deletePlan(m.id); } }, [icon('i-trash')]),
     ]),
   ]);
 }
@@ -1547,7 +1574,7 @@ function init() {
   $('#guestEnter').addEventListener('click', () => { store.set('kp_entered', true); showScreen('plans'); });
   $('#googleSignIn').addEventListener('click', async () => { store.set('kp_entered', true); try { await signInGoogle(); showScreen('plans'); } catch (e) { toast('登入失敗：' + e.message); } });
   $('#plansAuthBtn').addEventListener('click', async () => {
-    if (fb.user) { if (confirm('登出帳號？（本機資料會保留）')) { await signOutUser(); renderPlans(); } }
+    if (fb.user) { if (await confirmDialog({ title: '登出帳號', message: '登出後本機資料仍會保留。', confirmText: '登出' })) { await signOutUser(); renderPlans(); } }
     else if (fb.configured) { try { await signInGoogle(); } catch (e) { toast('登入失敗：' + e.message); } }
     else { openSettings(); }
   });
@@ -1624,7 +1651,8 @@ function init() {
   // initial screen: shared link → plans (loads into app); else app if returning, home if first time
   const hadShare = importSharedFromURL();
   if (hadShare) store.set('kp_entered', true);
-  showScreen(hadShare ? 'plans' : 'home');   // always land on the home / login page
+  // Landing: shared link → plans; returning/entered (or signed-in) users → their plans; first-timers → login/home.
+  showScreen(hadShare ? 'plans' : (store.get('kp_entered', false) ? 'plans' : 'home'));
 }
 
 document.addEventListener('DOMContentLoaded', init);

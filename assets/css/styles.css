@@ -781,3 +781,46 @@ main {
 .gen-step.is-done { color: var(--text-2); }
 .gen-step.is-done .gen-dot { background: var(--brand-2); border-color: var(--brand-2); }
 .gen-step.is-done .gen-dot::after { content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+/* ---- In-app dialogs (replace native confirm/prompt) ---- */
+.app-dialog { position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(8,10,18,.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); opacity: 0; transition: opacity .2s var(--ease); }
+.app-dialog.is-on { opacity: 1; }
+.app-dialog__card { width: 100%; max-width: 380px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow-2); transform: translateY(8px) scale(.98); transition: transform .2s var(--ease); }
+.app-dialog.is-on .app-dialog__card { transform: none; }
+.app-dialog__title { font-size: 17px; font-weight: 750; }
+.app-dialog__msg { font-size: 14px; color: var(--text-2); line-height: 1.6; margin-top: 8px; }
+.app-dialog__actions { display: flex; gap: 10px; margin-top: 18px; }
+.app-dialog__actions .btn { flex: 1; }
+.btn--danger { background: var(--sakura); color: #fff; border-color: transparent; }
+.btn--danger:hover { filter: brightness(1.05); }
+
+/* ---- Desktop / landscape (≥1000px): left nav rail + wide content ---- */
+@media (min-width: 1000px) {
+  :root { --maxw: 1180px; }
+  #app {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "topbar topbar" "side content";
+    min-height: 100vh;
+  }
+  #app > .appbar { grid-area: topbar; }
+  #app > main { grid-area: content; padding: 22px 32px 48px; min-height: 0; }
+  #app > .tabbar {
+    grid-area: side; position: sticky; top: 0; align-self: start;
+    width: 96px; max-width: none; height: 100vh; left: auto; right: auto; bottom: auto; transform: none;
+    flex-direction: column; justify-content: flex-start; gap: 4px;
+    padding: calc(var(--appbar-h) + 18px) 0 18px;
+    border-top: none; border-right: 1px solid var(--line);
+  }
+  #app > .tabbar .tab { flex: 0 0 auto; height: 66px; font-size: 11px; }
+  #tabind { display: none; }
+  .chat-wrap { height: calc(100vh - var(--appbar-h) - 70px); }
+  /* keep bottom sheets a sensible width on desktop */
+  .sheet { max-width: 560px; }
+  /* let dense pages breathe into two columns on very wide screens */
+  .plans-main { max-width: 860px; }
+}
+@media (min-width: 1400px) {
+  .grid2 { gap: 16px; }
+}
