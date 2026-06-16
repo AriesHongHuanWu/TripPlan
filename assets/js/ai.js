@@ -1,5 +1,6 @@
 // ============================================================================
-// gemini.js — Gemini Flash chat + agent mode (function calling -> page control)
+// ai.js — Plan AI assistant: chat + agent mode (function calling -> page control)
+//         + full-trip generation. Provider is proxied via /api/ai (kept private).
 // ============================================================================
 import { DAYS, PASS, TRIP, CITIES, cityByKey, allPois } from './data.js';
 import { getCurrentSummary } from './weather.js';
@@ -126,7 +127,7 @@ async function callGemini(payload) {
       try {
         res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
           { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.key }, body: JSON.stringify(payload) });
-      } catch (e) { throw new Error('無法連線到 Gemini（網路或瀏覽器阻擋）：' + (e && e.message || e)); }
+      } catch (e) { throw new Error('無法連線到 AI（網路或瀏覽器阻擋）：' + (e && e.message || e)); }
       if (res.ok) return res.json();
       const t = await res.text();
       lastErr = 'direct ' + res.status + ': ' + t.slice(0, 220);
@@ -135,7 +136,7 @@ async function callGemini(payload) {
     throw new Error(lastErr);
   }
   let res;
-  try { res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
+  try { res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
   catch (e) { throw new Error('無法連線到伺服器：' + (e && e.message || e)); }
   if (!res.ok) {
     const t = await res.text();
@@ -208,7 +209,7 @@ async function turn(scroll) {
     } catch (e) {
       typing.remove();
       const msg = e.message === 'NO_KEY'
-        ? '⚠️ 尚未設定 Gemini 金鑰。請在 Cloudflare 後台設定環境變數 `GEMINI_API_KEY`，或點右上「設定」貼上你的 API 金鑰即可立即使用。'
+        ? '⚠️ 尚未設定 AI 金鑰。請在伺服器設定 AI 服務金鑰，或點右上「設定」貼上你的 API 金鑰即可立即使用。'
         : '⚠️ 連線發生問題：' + e.message;
       addAI(scroll, msg);
       return;
@@ -284,7 +285,7 @@ export function initGemini(api) {
   const sw = document.getElementById('agentSwitch');
   const sug = document.getElementById('chatSuggest');
   const modelLabel = document.getElementById('aiModelLabel');
-  if (modelLabel) modelLabel.textContent = (getCfg().key ? '直連 · ' : '') + 'Gemini Flash 3.0';
+  if (modelLabel) modelLabel.textContent = 'Plan AI 引擎';
 
   // greeting
   addAI(scroll, '你好！我是 **Plan AI** 旅遊助理 👋\n打開上方**代理模式**，我能幫你**從零規劃任何國家的行程**（例如「幫我規劃 5 天東京自由行，7/10 出發」），也能調整目前行程、查天氣、找住宿、在地圖標點與開啟導航。');
@@ -317,7 +318,7 @@ export function initGemini(api) {
   }
 
   return {
-    setModelLabel: () => { if (modelLabel) modelLabel.textContent = (getCfg().key ? '直連 · ' : '') + 'Gemini Flash 3.0'; },
+    setModelLabel: () => { if (modelLabel) modelLabel.textContent = 'Plan AI 引擎'; },
     setAgent,
     ask: (text, opts = {}) => { if (opts.agent) setAgent(true); input.value = text; input.dispatchEvent(new Event('input')); send(scroll, input); },
   };

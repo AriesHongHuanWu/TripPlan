@@ -9,7 +9,7 @@ import {
 } from './util.js';
 import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.js';
 import { initMap, refreshMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
-import { initGemini, getCfg, generateTripPlan } from './gemini.js';
+import { initGemini, getCfg, generateTripPlan } from './ai.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
 import { initFirebase, fb, signInGoogle, signOutUser, pullUserData, pushUserData, shareSave, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs } from './firebase.js';
 import * as Notify from './notify.js';
@@ -779,18 +779,14 @@ function openSettings() {
   });
   body.appendChild(themeRow);
 
-  // Gemini
-  body.appendChild(el('.h-section', { text: 'Gemini AI 旅伴' }));
-  body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 12px', lineHeight: '1.6' }, text: '正式部署：在 Cloudflare Pages 後台設定環境變數 GEMINI_API_KEY（金鑰留在伺服器端，不外洩）。或在此貼上你的金鑰，App 會改為瀏覽器直連（適合本機測試）。' }));
-  const keyIn = el('input', { type: 'password', value: cfg.key, placeholder: 'AIza...（選填，本機直連用）', style: inputStyle() });
-  const modelIn = el('input', { type: 'text', value: cfg.model, placeholder: 'gemini-flash-latest', style: inputStyle() });
-  body.appendChild(el('label', { class: 'tiny muted-3', text: 'API 金鑰' }));
+  // AI engine
+  body.appendChild(el('.h-section', { text: 'AI 旅伴' }));
+  body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 12px', lineHeight: '1.6' }, text: '正式部署：在伺服器（Cloudflare Pages）設定 AI 服務金鑰即可，金鑰留在伺服器端、不外洩。本機測試可在此貼上你的金鑰改用瀏覽器直連。' }));
+  const keyIn = el('input', { type: 'password', value: cfg.key, placeholder: '貼上 API 金鑰（選填，本機直連用）', style: inputStyle() });
+  body.appendChild(el('label', { class: 'tiny muted-3', text: 'AI 服務金鑰' }));
   body.appendChild(keyIn);
-  body.appendChild(el('label', { class: 'tiny muted-3', style: { marginTop: '8px', display: 'block' }, text: '模型 ID（Gemini Flash 3.0 → gemini-flash-latest 或 gemini-3.5-flash）' }));
-  body.appendChild(modelIn);
   body.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '12px' }, onclick: () => {
     if (keyIn.value.trim()) localStorage.setItem('kp_gemini_key', keyIn.value.trim()); else localStorage.removeItem('kp_gemini_key');
-    localStorage.setItem('kp_gemini_model', modelIn.value.trim() || 'gemini-flash-latest');
     geminiCtl && geminiCtl.setModelLabel();
     toast('已儲存 AI 設定'); closeSheets();
   } }, [icon('i-ai'), '儲存']));
@@ -1265,7 +1261,7 @@ async function aiCreatePlan(text) {
   } catch (e) {
     hideGenProgress();
     if (e.message === 'NO_KEY') {
-      toast('需先設定 Gemini 金鑰才能用 AI 建立行程');
+      toast('需先設定 AI 金鑰才能用 AI 建立行程');
       const id = createPlan({ title: t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程', model: blankModel({ title: t || 'AI 行程' }), base: 'custom' });
       openPlan(id); goTab('ai');
     } else { toast('建立失敗：' + e.message); }
