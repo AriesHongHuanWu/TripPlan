@@ -753,6 +753,14 @@ function openSettings() {
   body.appendChild(el('button.btn.btn--block', { onclick: () => { const r = planReset(); toast(r.msg); closeSheets(); } }, ['↩︎ 還原原始行程']));
   body.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '10px', lineHeight: '1.6' }, text: fb.user ? '已登入，行程會自動同步到你的帳號。' : '登入（在「計劃」頁）後行程會自動雲端同步；未登入則存在本機，並可用每個計劃的「分享」按鈕分享。' }));
 
+  // Install
+  if (!pwaState().standalone) {
+    body.appendChild(el('.divider'));
+    body.appendChild(el('.h-section', { text: '安裝' }));
+    body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 10px', lineHeight: '1.6' }, text: '加到主畫面即可像 App 一樣全螢幕開啟、離線使用、收提醒。' }));
+    body.appendChild(el('button.btn.btn--block', { onclick: openInstallGuide }, [icon('i-install'), '加入主畫面教學']));
+  }
+
   // Notifications
   body.appendChild(el('.divider'));
   body.appendChild(el('.h-section', { text: '通知' }));
@@ -801,6 +809,71 @@ function maybeNotifyIntro() {
     ]));
     openSheet('sheet');
   }, 1200);
+}
+
+// ---------- Install (Add to Home Screen) guide ----------
+function pwaState() {
+  const ua = navigator.userAgent;
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/.test(ua);
+  return { standalone, ios, android };
+}
+function igStep(n, iconId, mockText, caption) {
+  return el('.ig-step', {}, [
+    el('.ig-num', { text: String(n) }),
+    el('div', { style: { flex: '1', minWidth: '0' } }, [
+      el('.ig-mock', {}, [el('.ig-mock__ic', {}, [icon(iconId)]), el('span', { text: mockText })]),
+      el('.ig-cap', { text: caption }),
+    ]),
+  ]);
+}
+function openInstallGuide() {
+  const s = pwaState();
+  $('#sheetTitle').textContent = '加入主畫面';
+  const b = clear($('#sheetBody'));
+  if (s.standalone) {
+    b.appendChild(el('.empty', {}, [el('.empty__emoji', { text: '✅' }), el('div', { text: '已安裝！' }), el('.tiny.muted', { style: { marginTop: '6px' }, text: '你已從主畫面開啟，享受全螢幕、離線與通知。' })]));
+    openSheet('sheet'); return;
+  }
+  b.appendChild(el('p', { class: 'tiny muted', style: { lineHeight: '1.6', marginBottom: '4px' }, text: '把行程加到手機主畫面，就能像 App 一樣全螢幕開啟、可離線看、收得到提醒。依你的裝置照做：' }));
+  if (window.__bip) {
+    b.appendChild(el('button.btn.btn--brand.btn--block', { style: { margin: '12px 0 4px' }, onclick: async () => {
+      try { window.__bip.prompt(); const r = await window.__bip.userChoice; if (r && r.outcome === 'accepted') { toast('已加入主畫面！'); window.__bip = null; closeSheets(); } else toast('已取消'); }
+      catch { toast('請改用下方手動步驟'); }
+    } }, [icon('i-install'), '一鍵加入主畫面']));
+  }
+  const PLAT = {
+    ios: ['📱 iPhone / iPad（Safari、Chrome）', [
+      [1, 'i-share-ios', '分享', '點「分享」鈕（方框 + 向上箭頭 ⬆）。iPhone 在底部工具列中央；iPad 在右上角。'],
+      [2, 'i-add-square', '加入主畫面', '在分享選單往下滑，點「加入主畫面 / Add to Home Screen」。'],
+      [3, 'i-add-square', '新增', '右上角點「新增 / Add」即完成。（iOS 26 若出現「以網頁 App 打開」開關，請保持開啟。）'],
+    ]],
+    android: ['🤖 Android（Chrome）', [
+      [1, 'i-dots-v', '⋮ 選單', '點右上角的「⋮」三點選單（或網址列右側的安裝圖示）。'],
+      [2, 'i-install', '安裝應用程式', '選「安裝應用程式 / 加入主畫面」。'],
+      [3, 'i-install', '安裝', '點「安裝 / 新增」即完成。'],
+    ]],
+    desktop: ['💻 電腦（Chrome / Edge）', [
+      [1, 'i-install', '安裝', '點網址列右側的「安裝」圖示，或「⋮」選單 →「安裝」。'],
+      [2, 'i-add-square', '安裝', '確認「安裝」即固定為應用程式。'],
+    ]],
+  };
+  const seg = el('.chiprow', { style: { margin: '12px 0' } });
+  const wrap = el('div', {});
+  function show(k) {
+    clear(wrap);
+    wrap.appendChild(el('.h-section', { style: { margin: '2px 2px 8px' }, text: PLAT[k][0] }));
+    PLAT[k][1].forEach(a => wrap.appendChild(igStep(a[0], a[1], a[2], a[3])));
+    [...seg.children].forEach(c => c.classList.toggle('is-on', c.dataset.k === k));
+  }
+  const order = s.ios ? ['ios', 'android', 'desktop'] : s.android ? ['android', 'ios', 'desktop'] : ['desktop', 'ios', 'android'];
+  const labels = { ios: 'iPhone', android: 'Android', desktop: '電腦' };
+  order.forEach(k => seg.appendChild(el('button.chip.chip--tap', { dataset: { k }, onclick: () => show(k) }, labels[k])));
+  b.appendChild(seg); b.appendChild(wrap);
+  show(order[0]);
+  b.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '14px' }, text: '加入後，從主畫面圖示開啟即為全螢幕 App，可離線使用並收得到行程提醒。' }));
+  openSheet('sheet');
 }
 
 // ---------- Geolocation ----------
@@ -1095,6 +1168,9 @@ function init() {
     else { openSettings(); }
   });
   $('#plansSettingsBtn').addEventListener('click', openSettings);
+  // install / add to home screen
+  const installBtn = $('#homeInstallBtn');
+  if (installBtn) { if (pwaState().standalone) installBtn.style.display = 'none'; else installBtn.addEventListener('click', openInstallGuide); }
   // AI create-trip on plans page
   const aci = $('#aiCreateInput');
   $('#aiCreateBtn').addEventListener('click', () => { const v = aci.value; aci.value = ''; aci.style.height = 'auto'; aiCreatePlan(v); });
