@@ -37,7 +37,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestGet({ env }) {
-  return json({ ok: true, model: env.GEMINI_MODEL || DEFAULT_MODEL, keyConfigured: !!env.GEMINI_API_KEY, hint: 'POST your generateContent payload here.' });
+  return json({ ok: true, model: env.GEMINI_MODEL || FALLBACK_MODELS[0], keyConfigured: !!env.GEMINI_API_KEY, hint: 'POST your generateContent payload here.' });
 }
 
 function json(obj, status = 200) {
