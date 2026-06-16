@@ -12,6 +12,7 @@ import { initMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap 
 import { initGemini, getCfg } from './gemini.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
 import { initFirebase, fb, signInGoogle, signOutUser, pullUserData, pushUserData, shareSave, shareGet } from './firebase.js';
+import * as Notify from './notify.js';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -750,18 +751,12 @@ function openSettings() {
   body.appendChild(el('.h-section', { text: '行程 · 編輯與同步' }));
   body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 10px', lineHeight: '1.6' }, text: (planCustomized ? '你已自訂行程（自動存在本機）。' : '行程可手動或由 AI 調整，變更自動存在本機。') + ' 在「行程」分頁點「編輯行程」可增刪改；或到「AI」分頁叫旅伴幫你改。' }));
   body.appendChild(el('button.btn.btn--block', { onclick: () => { const r = planReset(); toast(r.msg); closeSheets(); } }, ['↩︎ 還原原始行程']));
-  const syncCode = getSyncCode();
-  body.appendChild(el('p', { class: 'tiny muted-3', style: { margin: '14px 0 6px', lineHeight: '1.6' }, text: '雲端同步（選用，需在 Cloudflare 綁定 KV）：會同步「整份資料」— 行程、收藏、打包清單、我的預訂、花費紀錄、預算與匯率；不含 Gemini 金鑰與深淺色偏好。換裝置或與同行者用同一組分享碼共用。⚠️ 從雲端載入會覆蓋本機現有資料。' }));
-  body.appendChild(el('label', { class: 'tiny muted-3', text: '我的分享碼' }));
-  body.appendChild(el('input', { value: syncCode, readonly: 'readonly', style: inputStyle() }));
-  body.appendChild(el('.grid2', { style: { marginTop: '10px' } }, [
-    el('button.btn.btn--brand', { onclick: cloudUpload }, ['☁️ 上傳到雲端']),
-    el('button.btn', { onclick: () => cloudLoad(getSyncCode()) }, ['⬇️ 從雲端載入']),
-  ]));
-  body.appendChild(el('label', { class: 'tiny muted-3', style: { marginTop: '10px', display: 'block' }, text: '輸入同行者的分享碼載入其行程' }));
-  const friendIn = el('input', { type: 'text', placeholder: '例：ab12cd', style: inputStyle() });
-  body.appendChild(friendIn);
-  body.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => { const c = friendIn.value.trim(); if (c) cloudLoad(c); } }, ['載入此分享碼']));
+  body.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '10px', lineHeight: '1.6' }, text: fb.user ? '已登入，行程會自動同步到你的帳號。' : '登入（在「計劃」頁）後行程會自動雲端同步；未登入則存在本機，並可用每個計劃的「分享」按鈕分享。' }));
+
+  // Notifications
+  body.appendChild(el('.divider'));
+  body.appendChild(el('.h-section', { text: '通知' }));
+  renderNotifySettings(body);
 
   // About
   body.appendChild(el('.divider'));
@@ -770,6 +765,43 @@ function openSettings() {
   openSheet('settingsSheet');
 }
 function inputStyle() { return { width: '100%', padding: '11px 13px', borderRadius: '12px', border: '1px solid var(--line-strong)', background: 'var(--surface)', fontSize: '14px', marginTop: '4px' }; }
+
+function toggleSwitch(on, handler) {
+  const s = el('button.switch' + (on ? '.is-on' : ''), { role: 'switch', 'aria-checked': on });
+  s.addEventListener('click', () => { const now = !s.classList.contains('is-on'); s.classList.toggle('is-on', now); s.setAttribute('aria-checked', now); handler(now); });
+  return s;
+}
+function renderNotifySettings(body) {
+  if (!Notify.supported()) { body.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '8px' }, text: '此瀏覽器不支援通知。' })); return; }
+  const perm = Notify.permission(), c = Notify.cfg(), on = c.enabled && perm === 'granted';
+  body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 8px', lineHeight: '1.6' }, text: '行程進行中可收到「準備出發 / 下一個行程 / 車次」本地提醒（App 開著時）。共享聊天與 AI 完成的遠端推播需登入後生效。' }));
+  body.appendChild(el('.row-between', { style: { padding: '6px 0' } }, [
+    el('div', {}, [el('b', { text: '啟用通知' }), el('.tiny.muted-3', { text: perm === 'denied' ? '已被瀏覽器封鎖，請到網站設定解除' : (on ? '已開啟' : '關閉') })]),
+    toggleSwitch(on, async v => { if (v) await Notify.requestEnable(); else Notify.disable(); openSettings(); }),
+  ]));
+  Notify.TYPES.forEach(([k, emoji, label, desc]) => {
+    body.appendChild(el('.row-between', { style: { padding: '8px 0', opacity: on ? '1' : '.45' } }, [
+      el('div', { style: { minWidth: '0' } }, [el('div', { style: { fontWeight: '600', fontSize: '14px' }, text: `${emoji} ${label}` }), el('.tiny.muted-3', { text: desc })]),
+      toggleSwitch(!!c.types[k], v => Notify.setType(k, v)),
+    ]));
+  });
+  body.appendChild(el('button.btn.btn--block', { style: { marginTop: '10px' }, onclick: () => { if (!on) { toast('請先啟用通知'); return; } Notify.notify('reminder', '🔔 測試通知', '通知運作正常！'); } }, ['發送測試通知']));
+}
+function maybeNotifyIntro() {
+  if (Notify.asked() || !Notify.supported()) return;
+  setTimeout(() => {
+    if (Notify.asked()) return;
+    $('#sheetTitle').textContent = '開啟旅程通知？';
+    const b = clear($('#sheetBody'));
+    b.appendChild(el('p', { style: { fontSize: '14.5px', lineHeight: '1.7' }, text: '這個 App 可在旅途中提醒你：準備出發、下一個行程、搭車時間，以及（登入後）共享聊天與 AI 完成行程的通知。' }));
+    b.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '8px' }, text: '可隨時在「設定 → 通知」開關各項；不開也完全能用。' }));
+    b.appendChild(el('.grid2', { style: { marginTop: '16px' } }, [
+      el('button.btn.btn--brand', { onclick: async () => { await Notify.requestEnable(); closeSheets(); } }, ['🔔 開啟通知']),
+      el('button.btn', { onclick: () => { Notify.markAsked(); closeSheets(); } }, ['稍後再說']),
+    ]));
+    openSheet('sheet');
+  }, 1200);
+}
 
 // ---------- Geolocation ----------
 function requestLocation(auto) {
@@ -828,6 +860,7 @@ function showScreen(name) {
   if (name !== 'app') closeSheets();
   if (name === 'home') renderHome();
   if (name === 'plans') renderPlans();
+  if (name === 'app') maybeNotifyIntro();
   window.scrollTo({ top: 0 });
 }
 
@@ -865,6 +898,7 @@ function openPlan(id) {
   buildGiftPicker(); renderGifts();
   updateAppbarTitle();
   goTab('today'); showScreen('app');
+  try { Notify.scheduleReminders(); } catch {}
 }
 function updateAppbarTitle() { const m = plansMeta().find(p => p.id === currentPlanId); if (m) { const t = $('#appbarTitle'); if (t) t.textContent = m.title; } }
 function deletePlan(id) {
@@ -933,8 +967,13 @@ function renderPlans() {
   if (!metas.length) list.appendChild(el('.empty', {}, [el('.empty__emoji', { text: '🧳' }), el('div', { text: '還沒有任何行程' }), el('.tiny.muted', { style: { marginTop: '6px' }, text: '從下方範本建立你的第一份行程！' })]));
   metas.forEach(m => list.appendChild(planCard(m)));
   const tl = $('#templateList'); if (tl) { clear(tl); tl.appendChild(templateCard()); }
-  const lbl = $('#plansUserLabel'); if (lbl) lbl.textContent = fb.user ? ((fb.user.displayName || fb.user.email) + ' · 已同步') : (fb.configured ? '未登入 · 本機儲存' : '本機儲存');
-  const authBtn = $('#plansAuthBtn'); if (authBtn) authBtn.title = fb.user ? '帳號（已登入）' : '登入';
+  const lbl = $('#plansUserLabel'); if (lbl) lbl.textContent = fb.user ? ((fb.user.displayName || fb.user.email) + ' · 已同步') : (fb.configured ? '點右上登入以雲端同步' : '本機儲存');
+  const authBtn = $('#plansAuthBtn');
+  if (authBtn) {
+    authBtn.title = fb.user ? '帳號（已登入）' : '登入';
+    if (fb.user && fb.user.photoURL) authBtn.innerHTML = `<img src="${fb.user.photoURL}" alt="" referrerpolicy="no-referrer" style="width:28px;height:28px;border-radius:50%;object-fit:cover">`;
+    else authBtn.innerHTML = '<svg class="ic"><use href="#i-user"/></svg>';
+  }
 }
 function planCard(m) {
   return el('.plan-card', { onclick: () => openPlan(m.id) }, [
@@ -1006,6 +1045,7 @@ async function onAuthChange(user) {
       await pushUserData({ keys: allCloudData() });
     }
   } catch (e) { console.warn('cloud sync', e); }
+  try { Notify.registerPush(); } catch {}
   renderPlans();
 }
 
@@ -1053,12 +1093,14 @@ function init() {
   buildGiftPicker(); renderGifts();
   renderWeatherHero();
   renderWeatherCity(wxCity, $('#wxRoot'));
+  try { Notify.scheduleReminders(); } catch {}
 
   // gemini with control API
   geminiCtl = initGemini({
     status, goTab, openDay, showOnMap, goWeather, goSouvenirs,
     openMaps: url => window.open(url, '_blank', 'noopener'),
     planAdd, planRemove, planUpdate, planMove, planReset, newPlan: aiNewPlan,
+    notifyAI: (t, b) => Notify.notifyAI(t, b),
   });
 
   // toolkit (錦囊) + motion

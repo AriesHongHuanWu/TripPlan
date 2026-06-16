@@ -118,6 +118,7 @@ async function turn(scroll) {
   const tools = [{ functionDeclarations: agentOn ? [...READ_TOOLS, ...CONTROL_TOOLS] : READ_TOOLS }];
   const typing = el('.msg.msg--ai', {}, [el('.typing', {}, [el('span'), el('span'), el('span')])]);
   scroll.appendChild(typing); scroll.scrollTop = scroll.scrollHeight;
+  let planChanged = false;
 
   for (let i = 0; i < 6; i++) {
     let data;
@@ -147,6 +148,7 @@ async function turn(scroll) {
       const responses = [];
       for (const c of calls) {
         const { label, result } = await execTool(c);
+        if (/^(add|remove|update|move)_activity$|^new_plan$|^reset_plan$/.test(c.name)) planChanged = true;
         typing.before(el('.msg-action', {}, [icon('i-ai'), label]));
         scroll.scrollTop = scroll.scrollHeight;
         responses.push({ functionResponse: { name: c.name, id: c.id, response: typeof result === 'object' ? result : { result } } });
@@ -161,6 +163,7 @@ async function turn(scroll) {
       || (cand && cand.finishReason === 'SAFETY' ? '（這個問題我無法回答）' : '（沒有取得回覆，請再試一次）');
     history.push({ role: 'model', parts: (cand && cand.content && cand.content.parts) || [{ text }] });
     addAI(scroll, text);
+    if (planChanged && API && API.notifyAI) API.notifyAI('AI 已更新你的行程', text.replace(/\s+/g, ' ').slice(0, 60));
     return;
   }
   typing.remove();

@@ -6,7 +6,7 @@
 import { FIREBASE_CONFIG } from './firebase-config.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/11.0.0';   // adjust version if needed
-let auth, db, A, F, _user = null, _ready = false;
+let app, auth, db, A, F, M, messaging, _user = null, _ready = false;
 const cbs = [];
 
 export const fb = {
@@ -22,7 +22,7 @@ export async function initFirebase() {
     const appMod = await import(`${SDK}/firebase-app.js`);
     A = await import(`${SDK}/firebase-auth.js`);
     F = await import(`${SDK}/firebase-firestore.js`);
-    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    app = appMod.initializeApp(FIREBASE_CONFIG);
     auth = A.getAuth(app); db = F.getFirestore(app);
     try { await A.setPersistence(auth, A.browserLocalPersistence); } catch {}
     A.onAuthStateChanged(auth, u => { _user = u; _ready = true; cbs.forEach(cb => cb(u)); });
@@ -58,4 +58,20 @@ export async function shareGet(code) {
   if (!db) throw new Error('Firebase 尚未設定');
   const snap = await F.getDoc(F.doc(db, 'shared', code));
   return snap.exists() ? snap.data().plan : null;
+}
+
+// ---- Cloud Messaging (web push) ----
+export async function getPushToken(vapidKey) {
+  if (!app) return null;
+  try {
+    if (!M) { M = await import(`${SDK}/firebase-messaging.js`); if (M.isSupported && !(await M.isSupported())) return null; }
+    if (!messaging) messaging = M.getMessaging(app);
+    const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    return (await M.getToken(messaging, { vapidKey, serviceWorkerRegistration: reg })) || null;
+  } catch (e) { console.warn('getPushToken', e); return null; }
+}
+export function onForegroundMessage(cb) { try { if (M && messaging) M.onMessage(messaging, cb); } catch {} }
+export async function saveFcmToken(token) {
+  if (!_user || !token) return;
+  try { await F.setDoc(F.doc(db, 'users', _user.uid), { fcmTokens: { [token]: Date.now() } }, { merge: true }); } catch (e) { console.warn(e); }
 }

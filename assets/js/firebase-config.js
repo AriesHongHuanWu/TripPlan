@@ -20,3 +20,10 @@ export const FIREBASE_CONFIG = {
   appId: "1:211797227663:web:220bd756e64c3f549598fa",
   measurementId: "G-GK0NFY5BY8"
 };
+
+// Web Push (FCM) VAPID *public* key — safe to expose. From Firebase console →
+// Cloud Messaging → Web Push certificates → "Key pair".
+// (The matching PRIVATE key + the Admin SDK service-account JSON are SECRETS —
+//  keep them server-side only, never in this repo.)
+export const VAPID_KEY = "BAgLE8V4WD8Wrwmfe9HYUWfOcmMcgLKlCMD5rFm2d3KJZkrkceXJYhE4zCOgBB8Jrau1D-TpdO2UbG9n1iB7jmA";
+

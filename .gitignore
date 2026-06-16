@@ -11,6 +11,13 @@ node_modules/
 .env.*
 *.local
 
+# Firebase service-account / admin keys — NEVER commit (full project access)
+*serviceAccount*.json
+*firebase-adminsdk*.json
+*-firebase-adminsdk-*.json
+planaiid-*.json
+service-account*.json
+
 # OS / editor
 .DS_Store
 Thumbs.db
