@@ -1813,6 +1813,21 @@ function init() {
   }
   const hChips = $('#homeAiChips');
   if (hChips) ['5 天東京自由行', '6 天巴黎', '4 天首爾美食', '日本九州 8 天'].forEach(c => hChips.appendChild(el('button', { onclick: () => homeAiCreate(c) }, c)));
+  // Cover landing: nav CTAs reuse the existing enter/login handlers
+  ['coverStartTop', 'coverStartBottom'].forEach(idd => { const e = $('#' + idd); if (e) e.addEventListener('click', () => $('#guestEnter').click()); });
+  const clt = $('#coverLoginTop'); if (clt) clt.addEventListener('click', () => $('#googleSignIn').click());
+  // Cover: scroll-reveal + 3D parallax
+  try {
+    const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) en.target.classList.add('in'); }), { threshold: 0.16 });
+    $$('.reveal').forEach(e => io.observe(e));
+  } catch { $$('.reveal').forEach(e => e.classList.add('in')); }
+  const coverEl = $('#screen-home .cover');
+  if (coverEl && !matchMedia('(pointer: coarse)').matches) {
+    coverEl.addEventListener('mousemove', e => {
+      coverEl.style.setProperty('--mx', (e.clientX / window.innerWidth - 0.5).toFixed(3));
+      coverEl.style.setProperty('--my', (e.clientY / window.innerHeight - 0.5).toFixed(3));
+    });
+  }
   // 旅伴 mode toggle (AI 規劃 / 同行聊天) + collab chat composer
   $$('#aiModeSeg .chip').forEach(c => c.addEventListener('click', () => setAiMode(c.dataset.aimode)));
   const ci = $('#collabInput');
