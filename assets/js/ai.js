@@ -5,6 +5,7 @@
 import { DAYS, PASS, TRIP, CITIES, cityByKey, allPois } from './data.js';
 import { getCurrentSummary } from './weather.js';
 import { el, clear, icon, mdLite, gmapPlace, gmapDir, gmapHotels, toast, ymd } from './util.js';
+import { t, getLang } from './i18n.js';
 
 const LS = { key: 'kp_gemini_key', model: 'kp_gemini_model', mode: 'kp_agent_on' };
 export function getCfg() {
@@ -24,23 +25,28 @@ const TAB_LABEL = { today: '今日', plan: '行程', route: '路線', weather: '
 // ---- system instruction ----
 function tripContext() {
   const today = ymd(new Date());
-  if (!DAYS.length) return `今天日期：${today}。\n（目前是一份「空白行程」，使用者尚未規劃。請主動用 plan_trip 幫他從零建立整趟行程；資訊不足先問清楚。）`;
-  const cities = CITIES.map(c => c.name).filter(Boolean).join('、');
+  if (!DAYS.length) return t('ai.sys.ctx.today', { today }) + '\n' + t('ai.sys.ctx.empty');
+  const cities = CITIES.map(c => c.name).filter(Boolean).join('、') || t('ai.sys.ctx.citiesNotSet');
   const days = DAYS.map((d, i) => {
-    const acts = d.items.filter(x => x.type !== 'stay').map(x => `${x.time} ${x.title}${x.cost ? '(' + x.cost + ')' : ''}`).join('、');
+    const acts = d.items.filter(x => x.type !== 'stay').map(x => `${x.time} ${x.title}${x.cost ? '(' + x.cost + ')' : ''}`).join('、') || t('ai.sys.ctx.notScheduled');
     const cn = cityByKey[d.cityKey] ? cityByKey[d.cityKey].name : '';
-    return `第${i + 1}天 ${d.date}(${d.dow || ''}) 【${cn}】${d.title}：${acts || '（尚未安排）'}`;
+    return t('ai.sys.ctx.day', { n: i + 1, date: d.date, dow: d.dow || '', city: cn, title: d.title, acts });
   }).join('\n');
-  const pass = (PASS && PASS.best) ? `\n交通票：建議「${PASS.best}」${PASS.price || ''}／${PASS.days || ''}。` : '';
-  return `今天日期：${today}。\n這份行程「${TRIP.title}」（${TRIP.start} ~ ${TRIP.end}，共 ${DAYS.length} 天${TRIP.base ? '，' + TRIP.base : ''}）。城市：${cities || '（未設定）'}。\n${days}${pass}`;
+  const pass = (PASS && PASS.best) ? t('ai.sys.ctx.pass', { best: PASS.best, price: PASS.price || '', days: PASS.days || '' }) : '';
+  const base = TRIP.base ? '，' + TRIP.base : '';
+  return t('ai.sys.ctx.today', { today }) + '\n'
+    + t('ai.sys.ctx.trip', { title: TRIP.title, start: TRIP.start, end: TRIP.end, days: DAYS.length, base, cities })
+    + '\n' + days + pass;
 }
 function systemText() {
-  return `你是「Plan AI」— 一位世界級、親切、可靠、簡潔的旅遊規劃 AI 助理，使用繁體中文回答。你能規劃「任何國家」的行程。
-你完整掌握使用者目前開啟的這份行程（如下）。回答要具體、可執行、準確；不確定就用工具查證、不要編造。提到交通/車次/票價/營業時間時，提醒以即時 Google Maps／官方為準。
-查詢工具（隨時可用）：get_status（目前時間/位置/現在與下一個行程）、get_weather（某城市即時天氣）、web_search（最新資訊：營業時間/票價/活動/交通異動）、check_hazards（某景點或地區是否因災害、天災、事故、施工而暫停開放或需注意安全）。
-重要：規劃或即將前往某地時，主動用 check_hazards 確認重點景點現況；使用者問「安不安全／能不能去／有沒有關閉」時，務必先 check_hazards 再回答，並附上來源與替代方案。
-${agentOn ? '【代理模式開啟】你能操控 App 並直接修改這份行程：navigate、open_day、show_on_map、open_google_maps、show_souvenirs、find_hotels；add_activity／remove_activity／update_activity／move_activity 調整單一活動；add_day／remove_day 增減天數；reset_plan 還原。\n「從零規劃整趟」：使用者說「幫我規劃去○○、玩○天」時呼叫 plan_trip（傳入完整需求：目的地、天數或起訖日期、出發地/機場、班機時間、偏好）。完成後務必呼叫 open_day 1 讓使用者看到行程，並用 2–3 句說明重點與亮點。關鍵資訊不足時先用文字逐項問清楚（日期、機場、班機時間）再規劃。複雜調整可連續呼叫多個工具。' : '【代理模式關閉】僅以文字回答；若使用者想調整或從零建立行程，建議他開啟上方代理模式。'}
-回答精簡（3–6 句），善用條列。\n\n${tripContext()}`;
+  const name = getLang() === 'en' ? 'English' : '繁體中文';
+  return [
+    t('ai.sys.persona', { name }),
+    t('ai.sys.tools'),
+    agentOn ? t('ai.sys.agentOn') : t('ai.sys.agentOff'),
+    t('ai.sys.brevity'),
+    t('ai.sys.langDirective'),
+  ].join('\n') + '\n\n' + tripContext();
 }
 
 // ---- tools ----
@@ -170,9 +176,9 @@ export async function generateTripPlan({ prompt, answers } = {}) {
 
 先判斷必要資訊是否足夠。必要 = 目的地、以及（天數 或 起訖日期）。次要（可合理假設）= 出發地/機場、班機時間、旅遊節奏、偏好。
 若有「真正必要」且無法合理假設的資訊缺漏，只回傳：
-{"needInfo":[{"key":"dates","question":"請問你的旅遊日期或天數？","hint":"例如 7/10–7/15 或 5 天"}]}（最多 4 題，先問最關鍵的，問題用繁體中文）。
+{"needInfo":[{"key":"dates","question":"請問你的旅遊日期或天數？","hint":"例如 7/10–7/15 或 5 天"}]}（最多 4 題，先問最關鍵的，問題一律使用${getLang() === 'en' ? '英文 English' : '繁體中文'}）。
 
-否則回傳完整行程 JSON（所有人類可讀文字一律繁體中文）：
+否則回傳完整行程 JSON（所有人類可讀文字一律使用${getLang() === 'en' ? '英文 English' : '繁體中文'}）：
 {
  "trip":{"title":"短標題","subtitle":"一句副標","start":"YYYY-MM-DD","end":"YYYY-MM-DD","days":N,"base":"進出點或概述","country":"國家","emoji":"🗼","currency":{"symbol":"€","rate":34.5,"note":"1 EUR ≈ 34.5 TWD（參考）"}},
  "cities":[{"key":"英數slug","name":"中文名","en":"English","lat":48.8566,"lng":2.3522,"emoji":"🗼","blurb":"一句話特色","pois":[{"name":"中文名","en":"English","lat":48.86,"lng":2.34,"emoji":"📍","tag":"see|eat|shop","desc":"簡短說明","hours":"09:00–18:00","fee":"€20"}]}],
@@ -203,7 +209,7 @@ export async function generateTripPlan({ prompt, answers } = {}) {
   let obj = null;
   try { obj = JSON.parse(text); }
   catch { const m = text.match(/\{[\s\S]*\}/); if (m) { try { obj = JSON.parse(m[0]); } catch {} } }
-  if (!obj) throw new Error('AI 回傳格式無法解析，請再試一次');
+  if (!obj) throw new Error(t('ai.gen.err.parse'));
   return obj;
 }
 
@@ -225,9 +231,7 @@ async function turn(scroll) {
       });
     } catch (e) {
       typing.remove();
-      const msg = e.message === 'NO_KEY'
-        ? '⚠️ 尚未設定 AI 金鑰。請在伺服器設定 AI 服務金鑰，或點右上「設定」貼上你的 API 金鑰即可立即使用。'
-        : '⚠️ 連線發生問題：' + e.message;
+      const msg = e.message === 'NO_KEY' ? t('ai.err.noKey') : t('ai.err.connect') + e.message;
       addAI(scroll, msg);
       return;
     }
@@ -254,14 +258,14 @@ async function turn(scroll) {
     // text reply
     typing.remove();
     const text = parts.filter(p => p.text).map(p => p.text).join('').trim()
-      || (cand && cand.finishReason === 'SAFETY' ? '（這個問題我無法回答）' : '（沒有取得回覆，請再試一次）');
+      || (cand && cand.finishReason === 'SAFETY' ? t('ai.err.safety') : t('ai.err.noReply'));
     history.push({ role: 'model', parts: (cand && cand.content && cand.content.parts) || [{ text }] });
     addAI(scroll, text);
-    if (planChanged && API && API.notifyAI) API.notifyAI('AI 已更新你的行程', text.replace(/\s+/g, ' ').slice(0, 60));
+    if (planChanged && API && API.notifyAI) API.notifyAI(t('ai.msg.notifyTitle'), text.replace(/\s+/g, ' ').slice(0, 60));
     return;
   }
   typing.remove();
-  addAI(scroll, '（已完成多個操作）');
+  addAI(scroll, t('ai.msg.done'));
 }
 
 function addAI(scroll, text) {
@@ -303,13 +307,13 @@ export function initGemini(api) {
   const sw = document.getElementById('agentSwitch');
   const sug = document.getElementById('chatSuggest');
   const modelLabel = document.getElementById('aiModelLabel');
-  if (modelLabel) modelLabel.textContent = 'Plan AI 引擎';
+  if (modelLabel) modelLabel.textContent = t('ai.label');
 
   // greeting
-  addAI(scroll, '你好！我是 **Plan AI** 旅遊助理 👋\n打開上方**代理模式**，我能幫你**從零規劃任何國家的行程**（例如「幫我規劃 5 天東京自由行，7/10 出發」），也能調整目前行程、查天氣、找住宿、在地圖標點與開啟導航。');
+  addAI(scroll, t('ai.greeting'));
 
   // suggestions
-  SUGGESTIONS.forEach(s => sug.appendChild(el('button', { onclick: () => { input.value = s; send(scroll, input); } }, s)));
+  [1, 2, 3, 4, 5, 6, 7, 8].map(i => t('ai.suggest.' + i)).forEach(s => sug.appendChild(el('button', { onclick: () => { input.value = s; send(scroll, input); } }, s)));
 
   sendBtn.addEventListener('click', () => send(scroll, input));
   input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(scroll, input); } });
@@ -322,7 +326,7 @@ export function initGemini(api) {
   // mic (Web Speech API, optional)
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SR) {
-    const rec = new SR(); rec.lang = 'zh-TW'; rec.interimResults = false;
+    const rec = new SR(); rec.lang = getLang() === 'en' ? 'en-US' : 'zh-TW'; rec.interimResults = false;
     let recording = false;
     micBtn.addEventListener('click', () => {
       if (recording) { rec.stop(); return; }
@@ -336,7 +340,7 @@ export function initGemini(api) {
   }
 
   return {
-    setModelLabel: () => { if (modelLabel) modelLabel.textContent = 'Plan AI 引擎'; },
+    setModelLabel: () => { if (modelLabel) modelLabel.textContent = t('ai.label'); },
     setAgent,
     ask: (text, opts = {}) => { if (opts.agent) setAgent(true); input.value = text; input.dispatchEvent(new Event('input')); send(scroll, input); },
   };

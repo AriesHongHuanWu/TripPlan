@@ -811,6 +811,17 @@ function openSettings() {
   });
   body.appendChild(themeRow);
 
+  // Language / 語言
+  body.appendChild(el('.h-section', { text: '語言 / Language' }));
+  const langRow = el('.row', { style: { gap: '8px', margin: '10px 0 18px' } });
+  const curLang = (window.PlanAII18n ? window.PlanAII18n.getLang() : 'zh');
+  [['zh', '繁體中文'], ['en', 'English']].forEach(([v, l]) => {
+    langRow.appendChild(el('button.chip.chip--tap' + (curLang === v ? '.is-on' : ''), {
+      onclick: () => { if (window.PlanAII18n) window.PlanAII18n.setLang(v); openSettings(); },
+    }, l));
+  });
+  body.appendChild(langRow);
+
   // AI engine
   body.appendChild(el('.h-section', { text: 'AI 旅伴' }));
   body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 12px', lineHeight: '1.6' }, text: '正式部署：在伺服器（Cloudflare Pages）設定 AI 服務金鑰即可，金鑰留在伺服器端、不外洩。本機測試可在此貼上你的金鑰改用瀏覽器直連。' }));

@@ -1,9 +1,9 @@
 // Service worker — offline shell + installable PWA
-const CACHE = 'planai-v30';
+const CACHE = 'planai-v31';
 const ASSETS = [
   './', 'index.html',
   'assets/css/styles.css',
-  'assets/js/main.js', 'assets/js/data.js', 'assets/js/util.js',
+  'assets/js/main.js', 'assets/js/data.js', 'assets/js/util.js', 'assets/js/i18n.js',
   'assets/js/weather.js', 'assets/js/map.js', 'assets/js/ai.js', 'assets/js/toolkit.js',
   'assets/js/firebase.js', 'assets/js/firebase-config.js', 'assets/js/notify.js',
   'assets/icons/favicon.svg', 'manifest.webmanifest',

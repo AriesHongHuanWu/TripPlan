@@ -6,6 +6,18 @@
 <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#0a0c12" media="(prefers-color-scheme: dark)" />
 <meta name="description" content="Plan AI — 用 AI 規劃、編輯與共享你的旅程：完整逐日行程、即時天氣、路線導航、預算與旅遊錦囊，並可匯出高品質 PDF 計畫表。" />
+<!-- Social / SEO -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Plan AI" />
+<meta property="og:title" content="Plan AI — 用 AI 規劃任何旅程" />
+<meta property="og:description" content="說出目的地與日期，Plan AI 幾秒生成完整逐日行程 — 地圖、天氣、預算與 PDF 匯出，還能和朋友即時共編。免費、免安裝。" />
+<meta property="og:image" content="assets/icons/icon-512.png" />
+<meta property="og:locale" content="zh_TW" />
+<meta property="og:locale:alternate" content="en" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Plan AI — Smart Trip Planning" />
+<meta name="twitter:description" content="Describe your destination and dates; Plan AI builds a full day-by-day itinerary in seconds — maps, weather, budget, PDF export and real-time collaboration. Free, no install." />
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Plan AI","applicationCategory":"TravelApplication","operatingSystem":"Web, iOS, Android","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"AI trip planner that generates, edits and shares complete day-by-day itineraries for any country, with interactive maps, live weather, budgeting, PDF/calendar export and real-time collaboration."}</script>
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -98,6 +110,8 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
 <section id="screen-home" class="screen" hidden>
   <div class="gl" id="gl-top">
 
+    <a href="#gl-features" class="gl-skip">跳到主要內容 / Skip to content</a>
+
     <!-- ===== Top nav ===== -->
     <header class="gl-nav" id="glNav">
       <div class="gl-nav__in">
@@ -111,6 +125,7 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
         </nav>
         <span class="gl-nav__spacer"></span>
         <div class="gl-nav__actions">
+          <button class="gl-iconbtn" id="glLang" aria-label="Language / 語言" title="Language / 語言" style="font-weight:700;font-size:13px">中</button>
           <button class="gl-iconbtn" id="glTheme" title="淺色 / 深色 / 自動" aria-label="切換主題"></button>
           <button class="gl-btn gl-btn--sm gl-btn--ghost gl-hide-sm" id="coverLoginTop">登入</button>
           <button class="gl-btn gl-btn--sm gl-btn--primary" id="coverStartTop">免費開始</button>
@@ -418,10 +433,16 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
         </div>
         <div class="gl-footer__bottom">
           <span>© 2026 Plan AI · 個人非商業專案，依現況提供。</span>
-          <div class="gl-seg" id="glThemeSeg" role="group" aria-label="主題">
-            <button data-theme-set="light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5V4M12 20v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M1.5 12H4M20 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>淺色</button>
-            <button data-theme-set="dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>深色</button>
-            <button data-theme-set="system"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>自動</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <div class="gl-seg" id="glLangSeg" role="group" aria-label="Language / 語言">
+              <button data-lang-set="zh">繁體中文</button>
+              <button data-lang-set="en">English</button>
+            </div>
+            <div class="gl-seg" id="glThemeSeg" role="group" aria-label="主題">
+              <button data-theme-set="light"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5V4M12 20v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M1.5 12H4M20 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>淺色</button>
+              <button data-theme-set="dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>深色</button>
+              <button data-theme-set="system"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>自動</button>
+            </div>
           </div>
         </div>
       </div>
@@ -674,26 +695,29 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
 <script src="https://unpkg.com/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.js" crossorigin=""></script>
 
 <!-- App (ES modules) -->
+<script type="module" src="assets/js/i18n.js"></script>
 <script type="module" src="assets/js/main.js"></script>
 
-<!-- Landing (intro) interactions: theme light/dark/auto · menu · smooth-scroll · FAQ · legal docs -->
-<script>
+<!-- Landing (intro) interactions: i18n (zh/en) · theme · menu · smooth-scroll · FAQ · legal docs -->
+<script type="module">
+import { t, getLang, setLang } from './assets/js/i18n.js';
 (function () {
   var root = document.documentElement;
   var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var ICONS = {
     light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5V4M12 20v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M1.5 12H4M20 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>',
     dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>',
     system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
   };
-  var NAME = { light: '淺色', dark: '深色', system: '自動' };
+  function NAME(m) { return t('theme.opt.' + m); }
   // Source of truth for the landing's 3-way control. We keep our own key so "auto"
   // survives reloads even though main.js pins kp_theme to a concrete value on boot.
   function mode() { var s = localStorage.getItem('kp_thememode'); return (s === 'light' || s === 'dark' || s === 'system') ? s : 'system'; }
   function sync() {
     var m = mode();
     var tb = document.getElementById('glTheme');
-    if (tb) { tb.innerHTML = ICONS[m]; tb.title = '主題：' + NAME[m] + '（點按切換）'; }
+    if (tb) { tb.innerHTML = ICONS[m]; tb.title = t('theme.tooltip', { name: NAME(m) }); }
     var segs = document.querySelectorAll('#glThemeSeg button');
     for (var i = 0; i < segs.length; i++) segs[i].classList.toggle('on', segs[i].getAttribute('data-theme-set') === m);
   }
@@ -710,15 +734,31 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
   document.querySelectorAll('#glThemeSeg button').forEach(function (b) { b.addEventListener('click', function () { apply(b.getAttribute('data-theme-set')); }); });
   sync();
 
+  // ---- language (繁中 / English) ----
+  function syncLang() {
+    var l = getLang();
+    var lb = document.getElementById('glLang');
+    if (lb) lb.textContent = (l === 'en' ? 'EN' : '中');
+    document.querySelectorAll('#glLangSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-lang-set') === l); });
+  }
+  var langBtn = document.getElementById('glLang');
+  if (langBtn) langBtn.addEventListener('click', function () { setLang(getLang() === 'en' ? 'zh' : 'en'); });
+  document.querySelectorAll('#glLangSeg button').forEach(function (b) { b.addEventListener('click', function () { setLang(b.getAttribute('data-lang-set')); }); });
+  window.addEventListener('kp-lang-changed', function () {
+    sync(); syncLang();
+    if (modal && modal.classList.contains('open') && modal.dataset.docKey) openLegal(modal.dataset.docKey);
+  });
+  syncLang();
+
   var nav = document.getElementById('glNav');
   function onScroll() { if (nav) nav.classList.toggle('is-stuck', window.scrollY > 6); }
   window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
   var menuBtn = document.getElementById('glMenuBtn'), mobile = document.getElementById('glMobile');
-  function closeMenu() { if (mobile) mobile.classList.remove('open'); }
-  if (menuBtn) menuBtn.addEventListener('click', function () { if (mobile) mobile.classList.toggle('open'); });
+  function closeMenu() { if (mobile) mobile.classList.remove('open'); if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false'); }
+  if (menuBtn) { menuBtn.setAttribute('aria-expanded', 'false'); menuBtn.addEventListener('click', function () { if (mobile) { var op = mobile.classList.toggle('open'); menuBtn.setAttribute('aria-expanded', op ? 'true' : 'false'); } }); }
 
-  function scrollToSel(sel) { var t = document.querySelector(sel); if (!t) return; var y = t.getBoundingClientRect().top + window.scrollY - 70; window.scrollTo({ top: y < 0 ? 0 : y, behavior: 'smooth' }); }
+  function scrollToSel(sel) { var el = document.querySelector(sel); if (!el) return; var y = el.getBoundingClientRect().top + window.scrollY - 70; window.scrollTo({ top: y < 0 ? 0 : y, behavior: reduceMotion ? 'auto' : 'smooth' }); }
   document.querySelectorAll('[data-scroll]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); closeMenu(); scrollToSel(a.getAttribute('data-scroll')); }); });
 
   function act(name) {
@@ -728,61 +768,32 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
   document.querySelectorAll('[data-act]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); closeMenu(); act(a.getAttribute('data-act')); }); });
   var ms = document.getElementById('glMobileStart'); if (ms) ms.addEventListener('click', function () { closeMenu(); act('start'); });
 
+  // a11y: make data-driven anchors real, keyboard-focusable links
+  document.querySelectorAll('a[data-scroll]').forEach(function (a) { if (!a.getAttribute('href')) a.setAttribute('href', a.getAttribute('data-scroll')); });
+  document.querySelectorAll('a[data-legal],a[data-act]').forEach(function (a) { if (!a.getAttribute('href')) a.setAttribute('href', '#'); });
+  // safety net: never leave landing content permanently hidden if the reveal observer fails
+  setTimeout(function () { var r = document.querySelectorAll('#screen-home .reveal:not(.in)'); for (var i = 0; i < r.length; i++) r[i].classList.add('in'); }, 1600);
+
   document.querySelectorAll('#glFaq .gl-faq__q').forEach(function (q) {
+    q.setAttribute('aria-expanded', 'false');
     q.addEventListener('click', function () {
       var item = q.parentElement, a = q.nextElementSibling, open = item.classList.toggle('open');
+      q.setAttribute('aria-expanded', open ? 'true' : 'false');
       a.style.maxHeight = open ? (a.scrollHeight + 'px') : '0px';
     });
   });
 
-  var DOCS = {
-    privacy: { title: '隱私權政策', html: `<p class="upd">最後更新：2026 年 6 月</p>
-<p>Plan AI（以下稱「本服務」）是一個個人、非商業的旅程規劃工具，以「本機優先」設計。本政策說明我們如何處理你的資料。</p>
-<h4>我們收集哪些資料</h4>
-<ul><li><b>行程內容</b>：你建立的行程、活動、預算與筆記，預設只儲存在你裝置的瀏覽器中（localStorage）。</li>
-<li><b>帳號資料（選用）</b>：若你以 Google 登入，我們會取得你的名稱、Email 與大頭貼，用於識別與雲端同步。</li>
-<li><b>你輸入給 AI 的內容</b>：用於產生行程建議。</li></ul>
-<h4>資料如何使用</h4>
-<ul><li>提供並同步你的行程、產生 AI 規劃、顯示地圖與天氣。</li>
-<li>我們<b>不販售</b>你的個人資料，也<b>沒有</b>第三方廣告追蹤。</li></ul>
-<h4>第三方服務</h4>
-<p>為提供功能，部分資料會傳送給下列服務，並受其各自隱私政策約束：AI 引擎（生成行程）、Google／Firebase（登入與雲端同步）、地圖圖資（OpenStreetMap／CARTO）、天氣（Open-Meteo）。</p>
-<h4>你的選擇</h4>
-<ul><li>不登入即可完全在本機使用；可隨時登出或在設定中清除資料。</li>
-<li>清除瀏覽器資料即可移除本機儲存的行程。</li></ul>
-<h4>聯絡</h4>
-<p>本服務為開源專案，相關問題與資料請求可透過專案頁面提出。</p>` },
-    terms: { title: '服務條款', html: `<p class="upd">最後更新：2026 年 6 月</p>
-<h4>服務說明</h4>
-<p>Plan AI 是一個免費、個人、非商業的旅程規劃工具，依「現況（as-is）」提供，不附任何明示或默示之保證。</p>
-<h4>使用規範</h4>
-<ul><li>請勿將本服務用於非法用途，或濫用 AI 與第三方服務。</li>
-<li>你需為自己建立與分享的內容負責。</li></ul>
-<h4>行程資訊免責</h4>
-<p>AI 生成的行程、交通、票價、營業時間與天氣等資訊僅供參考，可能與實際情況不同。出發前請以官方來源為準；本服務不對因依賴這些資訊所生之任何損失負責。</p>
-<h4>可用性</h4>
-<p>服務內容可能隨時調整或中止，恕不另行通知。</p>
-<h4>智慧財產</h4>
-<p>各第三方服務、地名與商標均屬其各自擁有者所有。</p>` },
-    security: { title: '資料與安全', html: `<p class="upd">最後更新：2026 年 6 月</p>
-<h4>本機優先</h4>
-<p>你的行程預設只存在裝置的瀏覽器，不上傳即可離線使用。</p>
-<h4>傳輸加密</h4>
-<p>所有連線採用 HTTPS 加密。雲端同步透過 Google Firebase 進行，資料存放於你帳號專屬的空間並受其安全機制保護。</p>
-<h4>登入方式</h4>
-<p>採用 Google OAuth，本服務不會看到或保存你的 Google 密碼。</p>
-<h4>最小化原則</h4>
-<p>僅在提供功能所需時才傳輸資料，不販售、不做廣告追蹤。</p>
-<h4>你的責任</h4>
-<p>請妥善保管你的裝置與 Google 帳號；於公用裝置使用後請記得登出。</p>` },
-    about: { title: '關於 Plan AI', html: `<p class="upd">版本：2026 · 個人專案</p>
-<p>Plan AI 是一個用 AI 規劃任何旅程的免費工具：一句話生成完整逐日行程，並整合地圖、天氣、預算、旅遊錦囊、PDF／行事曆匯出與多人即時共編。</p>
-<p>技術組成：純靜態前端的漸進式網頁應用（PWA）＋ Cloudflare；地圖 OpenStreetMap、天氣 Open-Meteo、帳號與同步 Firebase。可加入主畫面離線使用。</p>
-<p>本服務為個人、非商業專案，依現況提供。</p>` }
-  };
-  var modal = document.getElementById('glModal'), mTitle = document.getElementById('glModalTitle'), mBody = document.getElementById('glModalBody');
-  function openLegal(key) { var d = DOCS[key]; if (!d || !modal) return; mTitle.textContent = d.title; mBody.innerHTML = d.html; mBody.scrollTop = 0; modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); }
-  function closeLegal() { if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); } }
+  var modal = document.getElementById('glModal'), mTitle = document.getElementById('glModalTitle'), mBody = document.getElementById('glModalBody'), lastFocus = null;
+  function openLegal(key) {
+    if (!modal) return;
+    mTitle.textContent = t('doc.' + key + '.title');
+    mBody.innerHTML = t('doc.' + key + '.html');
+    mBody.scrollTop = 0; modal.dataset.docKey = key;
+    if (!modal.classList.contains('open')) lastFocus = document.activeElement;
+    modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false');
+    var c = modal.querySelector('[data-legal-close]'); if (c) c.focus();
+  }
+  function closeLegal() { if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); modal.dataset.docKey = ''; if (lastFocus && lastFocus.focus) lastFocus.focus(); } }
   document.querySelectorAll('[data-legal]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); closeMenu(); openLegal(a.getAttribute('data-legal')); }); });
   document.querySelectorAll('[data-legal-close]').forEach(function (b) { b.addEventListener('click', closeLegal); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLegal(); });
