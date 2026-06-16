@@ -179,7 +179,7 @@ export async function generateTripPlan({ prompt, answers } = {}) {
   const data = await callGemini({
     system_instruction: { parts: [{ text: sys }] },
     contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 16384, responseMimeType: 'application/json' },
   });
   const cand = data.candidates && data.candidates[0];
   const text = ((cand && cand.content && cand.content.parts) || []).filter(p => p.text).map(p => p.text).join('').trim();

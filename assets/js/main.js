@@ -1243,40 +1243,19 @@ function askTripInfo(text, needInfo, prev) {
   openSheet('sheet');
 }
 
-// From the Plans page (or template AI button): describe a trip → AI builds the whole thing
-async function aiCreatePlan(text) {
+// Build a trip with AI. ALWAYS creates the plan first (so it shows up in 首頁),
+// opens it, switches to the AI chat, and lets the agent build/fill it live — so
+// progress and any errors are VISIBLE in the conversation, never a silent vanish.
+function aiCreatePlan(text) {
   const t = (text || '').trim();
-  const answers = pendingAnswers; pendingAnswers = null;
-  showGenProgress('正在了解你的需求…');
-  try {
-    const res = await generateTripPlan({ prompt: t, answers });
-    if (res && res.needInfo && res.needInfo.length && !(answers && answers._skip)) { hideGenProgress(); askTripInfo(t, res.needInfo, answers || {}); return; }
-    const model = normalizeModel(res);
-    if (!model.days.length) throw new Error('AI 沒有產生完整的每日行程，請補充目的地與天數再試');
-    $('#genTitle') && ($('#genTitle').textContent = '建立行程中…');
-    const id = createPlan({ title: model.trip.title || (t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程'), model, base: 'custom', emoji: model.trip.emoji });
-    hideGenProgress();
-    openPlan(id);
-    toast(`已建立「${model.trip.title}」🎉 可在 AI 旅伴繼續調整`);
-  } catch (e) {
-    hideGenProgress();
-    if (e.message === 'NO_KEY') {
-      toast('需先設定 AI 金鑰才能用 AI 建立行程');
-      const id = createPlan({ title: t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程', model: blankModel({ title: t || 'AI 行程' }), base: 'custom' });
-      openPlan(id); goTab('ai');
-    } else { toast('建立失敗：' + e.message); }
-  }
-}
-
-// From the HOME page: type a trip → enter the app's AI chat with the text auto-sent,
-// so the AI builds the whole trip live in the conversation (agent mode → plan_trip).
-function homeAiCreate(text) {
-  const t = (text || '').trim(); if (!t) return;
   store.set('kp_entered', true);
-  const id = createPlan({ title: t.slice(0, 16) || 'AI 行程', model: blankModel({ title: 'AI 行程' }), base: 'custom' });
+  const title = t ? ('AI · ' + t.slice(0, 14)) : 'AI 行程';
+  const id = createPlan({ title, model: blankModel({ title }), base: 'custom', emoji: '✨' });
   openPlan(id); goTab('ai');
-  setTimeout(() => { if (geminiCtl && geminiCtl.ask) geminiCtl.ask(t, { agent: true }); }, 380);
+  if (t && geminiCtl && geminiCtl.ask) setTimeout(() => geminiCtl.ask('幫我規劃：' + t, { agent: true }), 400);
+  else toast('跟 AI 說你想去哪、玩幾天，就幫你排好整趟 ✨');
 }
+function homeAiCreate(text) { const t = (text || '').trim(); if (!t) return; aiCreatePlan(t); }
 
 // ---- Sharing (Firebase if signed in, else Cloudflare KV) ----
 // Uploads the plan snapshot under a stable, revocable code stored on the plan meta,
@@ -1688,23 +1667,18 @@ function templateCard() {
     el('.plan-card__ico', { text: '🗾' }),
     el('.plan-card__body', {}, [el('.plan-card__title', { text: '九州・瀨戶內・關西 8 日' }), el('.plan-card__meta', {}, [el('span.plan-badge.plan-badge--tpl', { text: '範本' }), el('span', { text: '點此複製一份來編輯' })])]),
   ]);
-  // AI from blank — any country
+  // Build with AI — chat-based (any country); always opens the AI chat so you see it work
   const aiCard = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => aiCreatePlan('') }, [
-    el('.plan-card__ico', { text: '✨' }),
-    el('.plan-card__body', {}, [el('.plan-card__title', { text: '用 AI 從零建立（任何國家）' }), el('.plan-card__meta', {}, [el('span.plan-badge', { style: { background: 'var(--brand-2)', color: '#fff' }, text: 'AI' }), el('span', { text: '說出目的地與日期，自動排好整趟' })])]),
+    el('.plan-card__ico', { text: '💬' }),
+    el('.plan-card__body', {}, [el('.plan-card__title', { text: '和 AI 聊天建立（任何國家）' }), el('.plan-card__meta', {}, [el('span.plan-badge', { style: { background: 'var(--brand-2)', color: '#fff' }, text: 'AI' }), el('span', { text: '說出目的地與日期，AI 在聊天中幫你排好' })])]),
     el('.plan-card__actions', {}, [el('button.iconbtn', { title: '用 AI 建立', onclick: e => { e.stopPropagation(); aiCreatePlan(''); } }, [icon('i-ai')])]),
-  ]);
-  // blank manual start
-  const blankCard = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => { aiNewPlan('我的行程'); } }, [
-    el('.plan-card__ico', { text: '✏️' }),
-    el('.plan-card__body', {}, [el('.plan-card__title', { text: '從空白開始（自己編）' }), el('.plan-card__meta', {}, [el('span', { text: '建立空白行程，手動或請 AI 填寫' })])]),
   ]);
   // load shared
   const loadShared = el('.plan-card.plan-card--tpl', { style: { marginTop: '12px' }, onclick: () => openLoadSharedSheet() }, [
     el('.plan-card__ico', { text: '🔗' }),
     el('.plan-card__body', {}, [el('.plan-card__title', { text: '載入共享行程' }), el('.plan-card__meta', {}, [el('span', { text: '用同行者給的分享碼／連結' })])]),
   ]);
-  return el('div', {}, [card, aiCard, blankCard, loadShared]);
+  return el('div', {}, [card, aiCard, loadShared]);
 }
 
 // ---- Account / Firebase ----
