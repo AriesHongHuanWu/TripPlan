@@ -4,7 +4,7 @@
 // ============================================================================
 import { DAYS, PASS, TRIP, CITIES, cityByKey, allPois } from './data.js';
 import { getCurrentSummary } from './weather.js';
-import { el, clear, icon, mdLite, gmapPlace, gmapDir, gmapHotels, toast } from './util.js';
+import { el, clear, icon, mdLite, gmapPlace, gmapDir, gmapHotels, toast, ymd } from './util.js';
 
 const LS = { key: 'kp_gemini_key', model: 'kp_gemini_model', mode: 'kp_agent_on' };
 export function getCfg() {
@@ -23,28 +23,32 @@ const TAB_LABEL = { today: '今日', plan: '行程', route: '路線', weather: '
 
 // ---- system instruction ----
 function tripContext() {
-  if (!DAYS.length) return '（目前是一份空白行程，使用者尚未規劃。你可呼叫 plan_trip 幫他從零建立整趟行程。）';
+  const today = ymd(new Date());
+  if (!DAYS.length) return `今天日期：${today}。\n（目前是一份「空白行程」，使用者尚未規劃。請主動用 plan_trip 幫他從零建立整趟行程；資訊不足先問清楚。）`;
+  const cities = CITIES.map(c => c.name).filter(Boolean).join('、');
   const days = DAYS.map((d, i) => {
-    const acts = d.items.filter(x => x.type !== 'stay').map(x => `${x.time} ${x.title}`).join('、');
+    const acts = d.items.filter(x => x.type !== 'stay').map(x => `${x.time} ${x.title}${x.cost ? '(' + x.cost + ')' : ''}`).join('、');
     const cn = cityByKey[d.cityKey] ? cityByKey[d.cityKey].name : '';
-    return `第${i + 1}天 ${d.date}(${d.dow || ''}) 【${cn}】${d.title}：${acts}`;
+    return `第${i + 1}天 ${d.date}(${d.dow || ''}) 【${cn}】${d.title}：${acts || '（尚未安排）'}`;
   }).join('\n');
-  const pass = (PASS && PASS.best) ? `\n\n交通票：建議「${PASS.best}」${PASS.price || ''}／${PASS.days || ''}。` : '';
-  return `目前這份行程（${TRIP.title}，${TRIP.start} ~ ${TRIP.end}${TRIP.base ? '，' + TRIP.base : ''}）：\n${days}${pass}`;
+  const pass = (PASS && PASS.best) ? `\n交通票：建議「${PASS.best}」${PASS.price || ''}／${PASS.days || ''}。` : '';
+  return `今天日期：${today}。\n這份行程「${TRIP.title}」（${TRIP.start} ~ ${TRIP.end}，共 ${DAYS.length} 天${TRIP.base ? '，' + TRIP.base : ''}）。城市：${cities || '（未設定）'}。\n${days}${pass}`;
 }
 function systemText() {
-  return `你是「Plan AI」— 一位世界級、親切、簡潔的旅遊規劃 AI 助理，使用繁體中文回答。你能規劃「任何國家」的行程。
-你掌握使用者目前開啟的這份行程（如下）。回答要具體、可執行；提到交通/車次/時間時提醒以即時 Google Maps / 官方為準。
-你可以呼叫工具：get_status 取得使用者目前時間/位置/現在與下一個行程；get_weather 查某城市即時天氣；web_search 用網路查最新資訊（景點是否整修/暫停開放、最新營業時間/票價、活動、交通異動）— 需要即時或不確定的事實時務必先搜尋再回答，並可附上來源。
-${agentOn ? '【代理模式開啟】你能操控 App：navigate 切換分頁、open_day 顯示某天、show_on_map 在地圖標出地點、open_google_maps 開啟導航、show_souvenirs 顯示伴手禮、find_hotels 找附近飯店。\n你能「直接幫使用者調整行程」：add_activity 新增、remove_activity 刪除、update_activity 改時間/名稱、move_activity 移到別天、reset_plan 還原。\n你還能「從零規劃一整趟新行程」：當使用者說「幫我規劃一個去○○、玩○天」之類時，呼叫 plan_trip 並把完整需求字串（目的地、天數或起訖日期、出發地/機場、班機時間、偏好）傳入。規劃完呼叫 open_day 顯示第 1 天並用一句話說明重點。若關鍵資訊不足（日期、機場、班機時間），plan_trip 會回傳 needInfo，請改用文字逐項詢問使用者後再規劃。多項調整可連續呼叫多個工具。' : '【代理模式關閉】僅以文字回答；若使用者想調整或從零建立行程，建議他開啟上方代理模式。'}
-回答控制在 3–6 句，善用條列。\n\n${tripContext()}`;
+  return `你是「Plan AI」— 一位世界級、親切、可靠、簡潔的旅遊規劃 AI 助理，使用繁體中文回答。你能規劃「任何國家」的行程。
+你完整掌握使用者目前開啟的這份行程（如下）。回答要具體、可執行、準確；不確定就用工具查證、不要編造。提到交通/車次/票價/營業時間時，提醒以即時 Google Maps／官方為準。
+查詢工具（隨時可用）：get_status（目前時間/位置/現在與下一個行程）、get_weather（某城市即時天氣）、web_search（最新資訊：營業時間/票價/活動/交通異動）、check_hazards（某景點或地區是否因災害、天災、事故、施工而暫停開放或需注意安全）。
+重要：規劃或即將前往某地時，主動用 check_hazards 確認重點景點現況；使用者問「安不安全／能不能去／有沒有關閉」時，務必先 check_hazards 再回答，並附上來源與替代方案。
+${agentOn ? '【代理模式開啟】你能操控 App 並直接修改這份行程：navigate、open_day、show_on_map、open_google_maps、show_souvenirs、find_hotels；add_activity／remove_activity／update_activity／move_activity 調整單一活動；add_day／remove_day 增減天數；reset_plan 還原。\n「從零規劃整趟」：使用者說「幫我規劃去○○、玩○天」時呼叫 plan_trip（傳入完整需求：目的地、天數或起訖日期、出發地/機場、班機時間、偏好）。完成後務必呼叫 open_day 1 讓使用者看到行程，並用 2–3 句說明重點與亮點。關鍵資訊不足時先用文字逐項問清楚（日期、機場、班機時間）再規劃。複雜調整可連續呼叫多個工具。' : '【代理模式關閉】僅以文字回答；若使用者想調整或從零建立行程，建議他開啟上方代理模式。'}
+回答精簡（3–6 句），善用條列。\n\n${tripContext()}`;
 }
 
 // ---- tools ----
 const READ_TOOLS = [
   { name: 'get_status', description: '取得使用者目前當地時間、今天日期對應的行程、目前與下一個活動，以及（若已授權）所在位置與到下一站距離。回答「我現在/接下來要做什麼」時務必先呼叫。', parameters: { type: 'object', properties: {} } },
   { name: 'get_weather', description: '取得指定城市即時天氣與今日高低溫、降雨機率。', parameters: { type: 'object', properties: { city: { type: 'string', description: '此行程中的城市名稱' } }, required: ['city'] } },
-  { name: 'web_search', description: '用網路即時搜尋最新資訊。當需要「最新／即時」或你不確定的事實時呼叫，例如：某景點是否整修中或因災害/事故暫停開放、最新營業時間與票價、當地活動/節慶、交通異動。回答前請以搜尋結果為準並可附上來源。', parameters: { type: 'object', properties: { query: { type: 'string', description: '搜尋關鍵字（可含地名與年份，建議用當地語言或英文較準）' }, recent: { type: 'boolean', description: '是否只要近一個月內的資訊' } }, required: ['query'] } },
+  { name: 'web_search', description: '用網路即時搜尋最新資訊。當需要「最新／即時」或你不確定的事實時呼叫，例如：最新營業時間與票價、當地活動/節慶、交通異動。回答前請以搜尋結果為準並可附上來源。', parameters: { type: 'object', properties: { query: { type: 'string', description: '搜尋關鍵字（可含地名與年份，建議用當地語言或英文較準）' }, recent: { type: 'boolean', description: '是否只要近一個月內的資訊' } }, required: ['query'] } },
+  { name: 'check_hazards', description: '查詢某景點/地區「目前是否因災害、天災、事故或施工而暫停開放或需特別注意安全」。當使用者問安不安全、能不能去、有沒有關閉，或你在規劃/即將前往某地時主動確認現況，務必呼叫。', parameters: { type: 'object', properties: { place: { type: 'string', description: '景點或地區名稱（含城市與國家更準）' } }, required: ['place'] } },
 ];
 const CONTROL_TOOLS = [
   { name: 'navigate', description: '切換 App 分頁。', parameters: { type: 'object', properties: { tab: { type: 'string', enum: ['today', 'plan', 'route', 'weather', 'gift', 'ai'] } }, required: ['tab'] } },
@@ -57,6 +61,8 @@ const CONTROL_TOOLS = [
   { name: 'remove_activity', description: '刪除某天的某個活動（以名稱比對）。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' } }, required: ['day', 'title'] } },
   { name: 'update_activity', description: '修改某天某活動的時間/名稱/備註。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' }, newTime: { type: 'string' }, newTitle: { type: 'string' }, desc: { type: 'string' } }, required: ['day', 'title'] } },
   { name: 'move_activity', description: '把某活動移到另一天/時間。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' }, toDay: { type: 'integer' }, time: { type: 'string' } }, required: ['day', 'title', 'toDay'] } },
+  { name: 'add_day', description: '在行程「增加一天」（延長天數）。可指定日期、城市與主題；不指定日期則接在最後一天之後。', parameters: { type: 'object', properties: { date: { type: 'string', description: 'YYYY-MM-DD，可省略' }, city: { type: 'string', description: '當天主要城市名，可省略' }, title: { type: 'string', description: '當天主題，可省略' } } } },
+  { name: 'remove_day', description: '刪除第 N 天（其後天數會自動往前遞補）。', parameters: { type: 'object', properties: { day: { type: 'integer', description: '第幾天，從 1 起算' } }, required: ['day'] } },
   { name: 'reset_plan', description: '把目前行程還原成原始規劃。', parameters: { type: 'object', properties: {} } },
   { name: 'plan_trip', description: '從零規劃一整趟全新行程（任何國家），並套用到目前開啟的計劃。當使用者要你「規劃/安排一趟去某地、玩幾天」的行程時呼叫。', parameters: { type: 'object', properties: { request: { type: 'string', description: '盡量完整的需求：目的地、天數或起訖日期、出發地/機場、班機時間、偏好（美食/親子/節奏）等' } }, required: ['request'] } },
 ];
@@ -99,7 +105,18 @@ async function execTool(call) {
       case 'remove_activity': { const r = API.planRemove(a); return { label: `刪除「${a.title}」`, result: r }; }
       case 'update_activity': { const r = API.planUpdate(a); return { label: `調整「${a.title}」`, result: r }; }
       case 'move_activity': { const r = API.planMove(a); return { label: `移動「${a.title}」到第 ${a.toDay} 天`, result: r }; }
+      case 'add_day': { const r = API.planAddDay ? API.planAddDay(a) : { ok: false }; return { label: '新增一天', result: r }; }
+      case 'remove_day': { const r = API.planRemoveDay ? API.planRemoveDay(a) : { ok: false }; return { label: `刪除第 ${a.day} 天`, result: r }; }
       case 'reset_plan': { const r = API.planReset(); return { label: '還原原始行程', result: r }; }
+      case 'check_hazards': {
+        try {
+          const q = (a.place || '') + ' 開放 OR closed OR 休園 OR 災害 OR 地震 OR 颱風 OR 通行止め OR closure OR disaster OR warning';
+          const r = await fetch('/api/websearch?q=' + encodeURIComponent(q) + '&recent=1&n=5');
+          const d = await r.json();
+          if (!r.ok || d.error) return { label: `查「${a.place}」現況`, result: { note: '即時查詢需部署後才可用；目前無法確認，建議出發前再查官方公告。' } };
+          return { label: `查「${a.place}」是否有災害/封閉`, result: { place: a.place, results: (d.results || []).map(x => ({ title: x.title, snippet: x.content, url: x.url, date: x.date })) } };
+        } catch { return { label: `查「${a.place}」現況`, result: { error: '查詢失敗' } }; }
+      }
       case 'plan_trip': {
         const obj = await generateTripPlan({ prompt: a.request });
         if (obj && obj.needInfo && obj.needInfo.length) return { label: '需要更多資訊才能規劃', result: { needInfo: obj.needInfo } };
@@ -225,7 +242,7 @@ async function turn(scroll) {
       const responses = [];
       for (const c of calls) {
         const { label, result } = await execTool(c);
-        if (/^(add|remove|update|move)_activity$|^new_plan$|^reset_plan$|^plan_trip$/.test(c.name)) planChanged = true;
+        if (/^(add|remove|update|move)_activity$|^(add|remove)_day$|^new_plan$|^reset_plan$|^plan_trip$/.test(c.name)) planChanged = true;
         typing.before(el('.msg-action', {}, [icon('i-ai'), label]));
         scroll.scrollTop = scroll.scrollHeight;
         responses.push({ functionResponse: { name: c.name, id: c.id, response: typeof result === 'object' ? result : { result } } });
@@ -270,10 +287,11 @@ const SUGGESTIONS = [
   '幫我規劃 5 天的東京自由行',
   '規劃一趟 6 天巴黎，7/10 出發',
   '我現在該做什麼？',
+  '這幾天要去的景點現在有沒有災害或關閉？',
+  '幫我多加一天，去近郊走走',
   '幫我把今天排得輕鬆一點',
   '今天要帶傘嗎？',
   '幫我找今晚住宿',
-  '下雨了，幫我改成室內景點',
 ];
 
 export function initGemini(api) {

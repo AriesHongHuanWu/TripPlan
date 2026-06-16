@@ -125,7 +125,9 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
       </div>
       <div class="cover__hero-phone reveal">
         <div class="p3d p3d--float">
+          <span class="p3d__island"></span>
           <div class="p3d__scr">
+            <div class="p3d__glare" aria-hidden="true"></div>
             <div class="mk">
               <div class="mk__bar"><b>東京 · 5 天</b><span>6/17–21</span></div>
               <div class="mk__chip">✨ AI 已排好行程</div>
@@ -139,62 +141,76 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
       </div>
     </section>
 
-    <section class="cover__feat reveal">
-      <div class="cover__feat-phone"><div class="p3d p3d--tilt"><div class="p3d__scr"><div class="mk">
-        <div class="mk__bar"><b>AI 旅伴</b><span>代理模式</span></div>
-        <div class="mk__bub mk__bub--me">幫我排 5 天京都，多點美食</div>
-        <div class="mk__act">✨ 規劃「京都 5 天」</div>
-        <div class="mk__bub">已排好 5 天！含錦市場、伏見稻荷、嵐山與 12 間在地名店 🍵</div>
-      </div></div></div></div>
-      <div class="cover__feat-txt">
-        <div class="cover__kicker">✨ AI 規劃</div>
-        <h2>從零，一鍵生成</h2>
-        <p>輸入「5 天京都美食」，AI 立刻產出逐日行程、景點座標與交通；缺日期、機場或機票時會先問你，再精準排好。</p>
-      </div>
-    </section>
+    <!-- ===== Scroll-pinned phone story ===== -->
+    <section class="story" id="coverStory" aria-label="功能介紹">
+      <div class="story__track">
+        <div class="story__stage">
+          <div class="story__rail">
+            <div class="story__caps">
+              <article class="story__cap is-active" data-i="0">
+                <div class="cover__kicker">✨ AI 規劃</div>
+                <h2>從零，一鍵生成</h2>
+                <p>輸入「5 天京都美食」，AI 立刻產出逐日行程、景點座標與交通；缺日期、機場或機票時會先問你，再精準排好。</p>
+              </article>
+              <article class="story__cap" data-i="1">
+                <div class="cover__kicker">🗓️ 逐日行程</div>
+                <h2>清楚的時間軸，隨手微調</h2>
+                <p>每天的時間軸一目了然，拖一拖、改個時間，或一句話請 AI 幫你重排；還能匯出高品質 PDF 與行事曆。</p>
+              </article>
+              <article class="story__cap" data-i="2">
+                <div class="cover__kicker">🗺️ 地圖・天氣</div>
+                <h2>世界任何角落，都看得見</h2>
+                <p>互動地圖自動聚焦你的城市、用線把每天串起來；各地即時天氣與穿搭建議，出門前一眼掌握。</p>
+              </article>
+              <article class="story__cap" data-i="3">
+                <div class="cover__kicker">🤝 一起規劃</div>
+                <h2>和朋友即時共編</h2>
+                <p>邀請朋友加入同一份行程，一起編輯、即時同步；在「同行聊天」用 @ai 一句話，AI 就幫大家排好。</p>
+              </article>
+            </div>
+            <div class="story__dots" id="storyDots" aria-hidden="true"></div>
+          </div>
 
-    <section class="cover__feat cover__feat--rev reveal">
-      <div class="cover__feat-phone"><div class="p3d p3d--tilt p3d--tiltL"><div class="p3d__scr"><div class="mk">
-        <div class="mk__bar"><b>行程</b><span>8 天</span></div>
-        <div class="mk__row"><i>10:30</i><span>玉藻公園・高松城</span></div>
-        <div class="mk__row"><i>11:30</i><span>栗林公園</span></div>
-        <div class="mk__row"><i>13:00</i><span>讚岐烏龍午餐</span></div>
-        <div class="mk__row"><i>14:30</i><span>屋島展望台</span></div>
-        <div class="mk__chip mk__chip--g">可手動或叫 AI 調整</div>
-      </div></div></div></div>
-      <div class="cover__feat-txt">
-        <div class="cover__kicker">🗓️ 逐日行程</div>
-        <h2>清楚的時間軸，隨手微調</h2>
-        <p>每天的時間軸一目了然，拖一拖、改個時間，或一句話請 AI 幫你重排；還能匯出高品質 PDF 與行事曆。</p>
-      </div>
-    </section>
+          <div class="story__phone">
+            <div class="p3d p3d--story" id="storyPhone">
+              <span class="p3d__island"></span>
+              <div class="p3d__scr">
+                <div class="p3d__glare" aria-hidden="true"></div>
 
-    <section class="cover__feat reveal">
-      <div class="cover__feat-phone"><div class="p3d p3d--tilt"><div class="p3d__scr"><div class="mk mk--map">
-        <span class="mk__pin" style="left:24%;top:30%">🗼</span>
-        <span class="mk__pin" style="left:62%;top:46%">⛩️</span>
-        <span class="mk__pin" style="left:44%;top:70%">🏯</span>
-        <svg class="mk__route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M24 30 L62 46 L44 70" fill="none" stroke="#5b8def" stroke-width="1.4" stroke-dasharray="3 3"/></svg>
-        <div class="mk__wx mk__wx--abs">🗺️ 任何國家 · 自動連線路線</div>
-      </div></div></div></div>
-      <div class="cover__feat-txt">
-        <div class="cover__kicker">🗺️ 地圖・天氣</div>
-        <h2>世界任何角落，都看得見</h2>
-        <p>互動地圖自動聚焦你的城市、用線把每天串起來；各地即時天氣與穿搭建議，出門前一眼掌握。</p>
-      </div>
-    </section>
+                <div class="mk story__slide" data-i="0" style="--o:1">
+                  <div class="mk__bar"><b>AI 旅伴</b><span>代理模式</span></div>
+                  <div class="mk__bub mk__bub--me">幫我排 5 天京都，多點美食</div>
+                  <div class="mk__act">✨ 規劃「京都 5 天」</div>
+                  <div class="mk__bub">已排好 5 天！含錦市場、伏見稻荷、嵐山與 12 間在地名店 🍵</div>
+                </div>
 
-    <section class="cover__feat cover__feat--rev reveal">
-      <div class="cover__feat-phone"><div class="p3d p3d--tilt p3d--tiltL"><div class="p3d__scr"><div class="mk">
-        <div class="mk__bar"><b>同行聊天</b><span>3 人</span></div>
-        <div class="mk__bub">第三天想去看海 🌊</div>
-        <div class="mk__bub mk__bub--me">@ai 第三天加一個海邊景點</div>
-        <div class="mk__act">🤖 已加入「江之島」到第 3 天</div>
-      </div></div></div></div>
-      <div class="cover__feat-txt">
-        <div class="cover__kicker">🤝 一起規劃</div>
-        <h2>和朋友即時共編</h2>
-        <p>邀請朋友加入同一份行程，一起編輯、即時同步；在「同行聊天」用 @ai 一句話，AI 就幫大家排好。</p>
+                <div class="mk story__slide" data-i="1">
+                  <div class="mk__bar"><b>行程</b><span>8 天</span></div>
+                  <div class="mk__row"><i>10:30</i><span>玉藻公園・高松城</span></div>
+                  <div class="mk__row"><i>11:30</i><span>栗林公園</span></div>
+                  <div class="mk__row"><i>13:00</i><span>讚岐烏龍午餐</span></div>
+                  <div class="mk__row"><i>14:30</i><span>屋島展望台</span></div>
+                  <div class="mk__chip mk__chip--g">可手動或叫 AI 調整</div>
+                </div>
+
+                <div class="mk mk--map story__slide" data-i="2">
+                  <span class="mk__pin" style="left:24%;top:30%">🗼</span>
+                  <span class="mk__pin" style="left:62%;top:46%">⛩️</span>
+                  <span class="mk__pin" style="left:44%;top:70%">🏯</span>
+                  <svg class="mk__route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M24 30 L62 46 L44 70" fill="none" stroke="#5b8def" stroke-width="1.4" stroke-dasharray="3 3"/></svg>
+                  <div class="mk__wx mk__wx--abs">🗺️ 任何國家 · 自動連線路線</div>
+                </div>
+
+                <div class="mk story__slide" data-i="3">
+                  <div class="mk__bar"><b>同行聊天</b><span>3 人</span></div>
+                  <div class="mk__bub">第三天想去看海 🌊</div>
+                  <div class="mk__bub mk__bub--me">@ai 第三天加一個海邊景點</div>
+                  <div class="mk__act">🤖 已加入「江之島」到第 3 天</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 

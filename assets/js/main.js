@@ -342,6 +342,30 @@ function planReset() {
   snapshotCurrent(); scheduleCloudPush();
   return { ok: true, msg: '已還原為原始行程' };
 }
+function dateStrAdd(dateStr, n) { try { const d = new Date((dateStr || ymd(new Date())) + 'T00:00:00'); d.setDate(d.getDate() + n); return ymd(d); } catch { return ymd(new Date()); } }
+// AI/manual day management — rebuild the model so derived maps recompute.
+function planAddDay({ date, city, title } = {}) {
+  const m = currentModel();
+  const last = m.days[m.days.length - 1];
+  const dt = (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) ? date : (last && last.date ? dateStrAdd(last.date, 1) : ymd(new Date()));
+  let ck = '';
+  if (city) { const c = (m.cities || []).find(x => x.name && (x.name.includes(city) || city.includes(x.name))); if (c) ck = c.key; }
+  if (!ck) ck = (last && last.cityKey) || (m.cities[0] && m.cities[0].key) || '';
+  m.days.push({ date: dt, dow: dowOf(dt), cityKey: ck, weatherKey: ck, title: title || ('Day ' + (m.days.length + 1)), summary: '', items: [] });
+  if (m.trip) m.trip.days = m.days.length;
+  setTrip(m); renderActivePlan(); selectDay(m.days.length - 1); snapshotCurrent(); scheduleCloudPush();
+  return { ok: true, msg: `已新增第 ${m.days.length} 天（${dt}）` };
+}
+function planRemoveDay({ day } = {}) {
+  const m = currentModel();
+  const i = (parseInt(day, 10) || 0) - 1;
+  if (i < 0 || i >= m.days.length) return { ok: false, msg: `天數需為 1–${m.days.length}` };
+  if (m.days.length <= 1) return { ok: false, msg: '至少要保留一天' };
+  const removed = m.days.splice(i, 1)[0];
+  if (m.trip) m.trip.days = m.days.length;
+  setTrip(m); selectedDay = Math.max(0, Math.min(selectedDay, m.days.length - 1)); renderActivePlan(); snapshotCurrent(); scheduleCloudPush();
+  return { ok: true, msg: `已刪除第 ${i + 1} 天（${removed.date || ''}）` };
+}
 
 // add/edit a single activity via a form sheet
 function openPlanForm(dayIdx, item) {
@@ -1194,6 +1218,9 @@ function applyModel(res) {
   renderActivePlan();
   snapshotCurrent(); scheduleCloudPush();
   try { Notify.scheduleReminders(); } catch {}
+  // Linkage: jump to the itinerary so the user immediately SEES the built trip
+  // (the AI's summary stays in the 旅伴 chat to switch back to).
+  setTimeout(() => { try { openDay(1); } catch {} }, 200);
   return { ok: true, msg: `已規劃「${model.trip.title}」，共 ${model.days.length} 天、${model.cities.length} 個城市` };
 }
 
@@ -1798,6 +1825,48 @@ function init() {
       coverEl.style.setProperty('--my', (e.clientY / window.innerHeight - 0.5).toFixed(3));
     });
   }
+  // Cover: scroll-pinned phone story — rotate the phone & cross-fade screenshots on scroll
+  (function () {
+    const track = $('#coverStory .story__track');
+    const phone = $('#storyPhone');
+    if (!track || !phone) return;
+    const slides = $$('#coverStory .story__slide');
+    const caps = $$('#coverStory .story__cap');
+    const N = slides.length;
+    const RY = [-16, 11, -13, 15]; // per-slide yaw targets (deg)
+    const dotsWrap = $('#storyDots');
+    if (dotsWrap && !dotsWrap.children.length) {
+      for (let i = 0; i < N; i++) dotsWrap.appendChild(el('span', i === 0 ? { class: 'on' } : {}));
+    }
+    const dots = dotsWrap ? Array.from(dotsWrap.children) : [];
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      slides.forEach((s, i) => s.style.setProperty('--o', i === 0 ? '1' : '0'));
+      return;
+    }
+    const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+    let ticking = false;
+    function update() {
+      ticking = false;
+      const r = track.getBoundingClientRect();
+      const span = r.height - window.innerHeight;
+      const p = clamp(-r.top / (span || 1), 0, 1);
+      const pos = p * (N - 1);
+      const active = Math.round(pos);
+      slides.forEach((s, i) => s.style.setProperty('--o', clamp(1 - Math.abs(pos - i), 0, 1).toFixed(3)));
+      caps.forEach((c, i) => c.classList.toggle('is-active', i === active));
+      dots.forEach((d, i) => d.classList.toggle('on', i === active));
+      const i0 = Math.floor(pos), f = pos - i0, i1 = Math.min(i0 + 1, N - 1);
+      const ry = RY[i0] + (RY[i1] - RY[i0]) * f;
+      phone.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+      phone.style.setProperty('--rx', (5 - p * 3).toFixed(2) + 'deg');
+      phone.style.setProperty('--rz', (ry * 0.1).toFixed(2) + 'deg');
+      phone.style.setProperty('--glx', (58 + ry * 2.4).toFixed(1) + '%');
+    }
+    const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    update();
+  })();
   // 旅伴 mode toggle (AI 規劃 / 同行聊天) + collab chat composer
   $$('#aiModeSeg .chip').forEach(c => c.addEventListener('click', () => setAiMode(c.dataset.aimode)));
   const ci = $('#collabInput');
@@ -1832,7 +1901,7 @@ function init() {
   geminiCtl = initGemini({
     status, goTab, openDay, showOnMap, goWeather, goSouvenirs,
     openMaps: url => window.open(url, '_blank', 'noopener'),
-    planAdd, planRemove, planUpdate, planMove, planReset, newPlan: aiNewPlan, applyModel,
+    planAdd, planRemove, planUpdate, planMove, planReset, planAddDay, planRemoveDay, newPlan: aiNewPlan, applyModel,
     notifyAI: (t, b) => { Notify.notifyAI(t, b); if (currentCollab) collabSendMsg(currentCollab, { sender: 'ai', name: 'AI', text: b || t }); },
   });
 
