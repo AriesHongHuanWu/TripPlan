@@ -866,11 +866,68 @@ function openSettings() {
   body.appendChild(el('.h-section', { text: '通知' }));
   renderNotifySettings(body);
 
+  // App update / cache
+  body.appendChild(el('.divider'));
+  body.appendChild(el('.h-section', { text: '應用程式 · 更新' }));
+  body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 10px', lineHeight: '1.6' }, text: '有新版本時，畫面下方會自動跳出「重新整理」提示。如果覺得內容沒更新、畫面怪怪的，可以清除離線暫存、完整重新載入最新版（你的行程資料不會被刪除）。' }));
+  body.appendChild(el('button.btn.btn--block', { onclick: async () => {
+    if (await confirmDialog({ title: '清除暫存並重新整理', message: '會清掉離線暫存並重新下載最新版本。你的行程與設定都會保留。要繼續嗎？', confirmText: '清除並重新整理' })) { toast('正在清除暫存…'); hardRefresh(); }
+  } }, ['⟳ 清除暫存並重新整理']));
+
   // About
   body.appendChild(el('.divider'));
   body.appendChild(el('.h-section', { text: '關於' }));
   body.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '8px', lineHeight: '1.7' }, html: '九州・本州・四國 JR 自由行規劃 · 2026/06/17–06/24。<br>天氣：Open-Meteo（免金鑰）。地圖：Leaflet + OpenStreetMap/CARTO。導航：Google Maps 深連結。<br>⚠️ 班次與票價為參考值（依官方資料整理），請以即時 Google Maps / JR 官方為準。' }));
   openSheet('settingsSheet');
+}
+
+// ---- App update / cache control -------------------------------------------
+// "Stuck, just give me the freshest version": clear all caches + unregister the
+// service worker, then hard-reload. Plan data in localStorage is NOT touched.
+async function hardRefresh() {
+  try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch {}
+  try { if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } } catch {}
+  try { sessionStorage.setItem('kp_refreshed', '1'); } catch {}
+  location.reload();
+}
+let _updBanner = null;
+function showUpdateBanner() {
+  if (_updBanner || document.getElementById('updBanner')) return;   // only one at a time
+  const reloadBtn = el('button', { style: { border: 'none', borderRadius: '999px', padding: '8px 16px', background: 'var(--grad-brand, var(--brand-2, #2563eb))', color: '#fff', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }, onclick: () => { reloadBtn.textContent = '更新中…'; location.reload(); } }, '重新整理');
+  const bar = el('#updBanner', { role: 'status', style: {
+    position: 'fixed', left: '50%', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', transform: 'translateX(-50%)',
+    zIndex: '9000', display: 'flex', alignItems: 'center', gap: '10px', maxWidth: 'calc(100vw - 24px)',
+    padding: '10px 10px 10px 16px', borderRadius: '999px', background: 'var(--surface, #fff)', color: 'var(--text, #111)',
+    border: '1px solid var(--line, #e5e7eb)', boxShadow: '0 14px 36px -10px rgba(0,0,0,.45)', font: '600 14px/1.3 system-ui, -apple-system, sans-serif',
+  } }, [
+    el('span', { style: { whiteSpace: 'nowrap' }, text: '✨ 已有新版本' }),
+    reloadBtn,
+    el('button', { 'aria-label': '稍後', title: '稍後', style: { border: 'none', background: 'transparent', color: 'var(--text-3, #888)', fontSize: '17px', lineHeight: '1', cursor: 'pointer', padding: '4px 6px' }, onclick: () => { bar.remove(); _updBanner = null; } }, '✕'),
+  ]);
+  document.body.appendChild(bar); _updBanner = bar;
+}
+// Register the SW and watch for a newer deploy → show a non-intrusive reload prompt.
+function initSWUpdate() {
+  if (!('serviceWorker' in navigator)) return;
+  try { if (sessionStorage.getItem('kp_refreshed')) { sessionStorage.removeItem('kp_refreshed'); setTimeout(() => toast('已清除暫存並載入最新版 ✨'), 600); } } catch {}
+  const hadController = !!navigator.serviceWorker.controller;   // false on a first-ever install
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    if (!reg) return;
+    const check = () => { try { reg.update(); } catch {} };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner();   // a new SW was already waiting
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing; if (!nw) return;
+      nw.addEventListener('statechange', () => { if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(); });
+    });
+    // Re-check for a new deploy whenever the tab regains attention + periodically,
+    // so an already-open tab/PWA notices updates without a manual reload.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    window.addEventListener('focus', check);
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {});
+  // Backstop for auto-skipWaiting SWs: a new worker took control after we already
+  // had one → offer reload. (hadController guards the first-install case.)
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) showUpdateBanner(); });
 }
 function inputStyle() { return { width: '100%', padding: '11px 13px', borderRadius: '12px', border: '1px solid var(--line-strong)', background: 'var(--surface)', fontSize: '14px', marginTop: '4px' }; }
 
@@ -1474,7 +1531,7 @@ async function buildCurrentTrip(text, answers, titleHint) {
   hideGenProgress();
   if (res && res.needInfo && res.needInfo.length) { askTripInfo(t, res.needInfo, answers, titleHint); return; }
   const r = applyModel(res);
-  if (!r || r.ok === false) appDialog({ title: '行程內容不足', message: (r && r.msg) || '請再描述清楚一點（目的地、天數），或到「旅伴」用聊天調整。', confirmText: '前往旅伴', cancelText: '知道了' }).then(go => { if (go) goTab('ai'); });
+  if (!r || r.ok === false) appDialog({ title: 'AI 這次沒排好，再試一次？', message: '有時候是模型忙線或回應不完整。大多數情況再試一次就會成功；或改用「旅伴」聊天慢慢排。', confirmText: '再試一次', cancelText: '改用聊天' }).then(retry => { if (retry) buildCurrentTrip(text, answers, titleHint); else goTab('ai'); });
   else { const built = (res.days || []).length, want = parseInt((titleHint || '').match(/(\d+)\s*日\s*$/)?.[1] || '0', 10); toast(want && built < want ? `✨ 已先排好前 ${built} 天（其餘可稍後續排）` : '✨ 行程建立完成！'); }
 }
 function homeAiCreate(text) { const t = (text || '').trim(); if (!t) return; aiCreatePlan(t); }
@@ -1672,6 +1729,19 @@ async function openShareSheet(id) {
 
     const body = clear($('#sheetBody'));
     body.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', marginBottom: '10px' }, text: '管理「' + (m0 ? m0.title : '行程') + '」的存取權與成員。' }));
+
+    // ★ Simplest path first: copy ONE link, send it, they open it and they're in.
+    const genLabel = access.general === 'restricted' ? '🔒 目前限定，只有被加入的人能開' : (access.general === 'viewer' ? '🔗 任何拿到連結的人可「檢視」' : access.general === 'commenter' ? '🔗 任何拿到連結的人可「留言」' : '🔗 任何拿到連結的人可「一起編輯」');
+    body.appendChild(el('div', { style: { background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: '16px', padding: '14px', marginBottom: '16px' } }, [
+      el('.row', { style: { gap: '8px', alignItems: 'center', marginBottom: '4px' } }, [icon('i-share'), el('b', { style: { fontSize: '15px' }, text: '邀請朋友（最簡單）' })]),
+      el('.tiny.muted-3', { style: { lineHeight: '1.7', marginBottom: '10px' }, text: '複製這條連結傳給朋友（LINE／訊息都行）— 他點開就會直接加入這份行程，免登入就能看。' }),
+      el('button.btn.btn--brand.btn--block', { onclick: async () => {
+        const msg = `一起規劃「${m0 ? m0.title : '這趟旅行'}」吧！用 Plan AI 打開連結就能一起看／編輯：\n${link}`;
+        try { await navigator.clipboard.writeText(msg); toast('已複製邀請訊息，貼到 LINE／訊息傳給朋友即可 ✨'); }
+        catch { try { await navigator.clipboard.writeText(link); toast('已複製邀請連結'); } catch { toast('請往下捲動，手動複製連結'); } }
+      } }, [icon('i-copy'), '複製邀請連結']),
+      el('.tiny.muted-3', { style: { marginTop: '8px', textAlign: 'center' }, text: genLabel + (owner ? '（可在下方「一般存取權」調整）' : '') }),
+    ]));
 
     if (owner) {
       // --- Add people by email ---
@@ -2764,8 +2834,8 @@ function init() {
   // clock — refresh Today every minute
   setInterval(() => { if (currentTab === 'today') renderToday(); if (currentTab === 'weather') renderWeatherHero(); }, 60000);
 
-  // service worker (offline / installable)
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // service worker (offline / installable) + "new version available" prompt
+  initSWUpdate();
 
   // firebase (guarded) + persist on exit
   initFirebase().then(() => { fb.onAuth(onAuthChange); if (pendingView) { const v = pendingView; pendingView = null; openPlanDetail(v); } });
