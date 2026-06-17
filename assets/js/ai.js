@@ -286,7 +286,7 @@ const CHUNK_DAYS = 4;    // days produced per Gemini call — reduced to 4 to av
 
 // One Gemini call. With `known` set it produces ONLY the next day-range (continuation);
 // otherwise it produces the full framework + the first day-range.
-async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {}) {
+async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known, force } = {}) {
   const sys = `你是 Plan AI，一位世界級旅遊規劃師。根據使用者需求，為「任何國家」產生一份**像專業旅遊書一樣完整、準確、可直接出發使用**的逐日行程，並只輸出「嚴格 JSON」（不要 markdown、不要任何說明文字）。
 
 先判斷必要資訊是否足夠。必要 = 目的地、以及（天數 或 起訖日期）。次要（可合理假設）= 出發地/機場、班機時間、旅遊節奏、偏好。
@@ -335,7 +335,8 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {
   const hasAnswers = answers && Object.keys(answers).length > 0;
   const userMsg = `使用者需求：「${(prompt || '').trim() || '(未提供文字，請依常見熱門選擇合理規劃並在 needInfo 詢問關鍵資訊)'}」`
     + (total ? `\n總天數：${total} 天。` : '')
-    + (hasAnswers ? `\n使用者補充資訊：\n${Object.entries(answers).filter(([k]) => k !== '_skip').map(([k, v]) => `- ${k}：${v}`).join('\n')}${answers._skip ? '\n（使用者選擇略過提問）' : ''}\n\n【重要指令】使用者已回覆部分問題，請「直接利用現有資訊排定行程」，大膽假設任何其餘缺漏的細節（若天數未明則預設為 5 天）。【絕對禁止】再次回傳 needInfo 進入迴圈，請務必直接產出完整行程 JSON！` : '');
+    + (hasAnswers ? `\n使用者補充資訊：\n${Object.entries(answers).filter(([k]) => k !== '_skip').map(([k, v]) => `- ${k}：${v}`).join('\n')}${answers._skip ? '\n（使用者選擇略過提問）' : ''}\n\n【重要指令】使用者已回覆部分問題，請「直接利用現有資訊排定行程」，大膽假設任何其餘缺漏的細節（若天數未明則預設為 5 天）。【絕對禁止】再次回傳 needInfo 進入迴圈，請務必直接產出完整行程 JSON！` : '')
+    + (force ? `\n\n【再次嘗試】上一次沒有產生 days。這次務必直接以合理假設完成，回傳「至少 ${dayTo || total || 5} 天」的完整 days 陣列；絕對禁止空的 days，也禁止 needInfo。` : '');
   const data = await callGemini({
     system_instruction: { parts: [{ text: sys + chunkNote }] },
     contents: [{ role: 'user', parts: [{ text: userMsg }] }],
@@ -363,8 +364,17 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {
 export async function generateTripPlan({ prompt, answers, days, onProgress } = {}) {
   const parsedTotal = Math.max(0, days || parseDays(prompt) || (answers ? parseDays(Object.values(answers).join(' ')) : 0) || 0);
   const total = (!parsedTotal && answers && Object.keys(answers).length > 0) ? 5 : parsedTotal;
-  const first = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: total ? Math.min(total, CHUNK_DAYS) : 0 });
+  const day1to = total ? Math.min(total, CHUNK_DAYS) : 0;
+  let first = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: day1to });
   if (first && first.needInfo && first.needInfo.length) return first;
+  // Weak models (esp. the flash-lite default) sometimes return valid JSON with an
+  // empty/missing days array. Retry once, forcefully, before giving up — far better
+  // than dead-ending the user with "行程內容不足".
+  if (!first || !Array.isArray(first.days) || !first.days.length) {
+    const retry = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: day1to, force: true });
+    if (retry && retry.needInfo && retry.needInfo.length) return retry;
+    if (retry && Array.isArray(retry.days)) first = retry;
+  }
   if (!first || !Array.isArray(first.days)) return first;
   const model = first;
   onProgress && onProgress(model.days.length, total || model.days.length);

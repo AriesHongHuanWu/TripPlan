@@ -1474,7 +1474,7 @@ async function buildCurrentTrip(text, answers, titleHint) {
   hideGenProgress();
   if (res && res.needInfo && res.needInfo.length) { askTripInfo(t, res.needInfo, answers, titleHint); return; }
   const r = applyModel(res);
-  if (!r || r.ok === false) appDialog({ title: '行程內容不足', message: (r && r.msg) || '請再描述清楚一點（目的地、天數），或到「旅伴」用聊天調整。', confirmText: '前往旅伴', cancelText: '知道了' }).then(go => { if (go) goTab('ai'); });
+  if (!r || r.ok === false) appDialog({ title: 'AI 這次沒排好，再試一次？', message: '有時候是模型忙線或回應不完整。大多數情況再試一次就會成功；或改用「旅伴」聊天慢慢排。', confirmText: '再試一次', cancelText: '改用聊天' }).then(retry => { if (retry) buildCurrentTrip(text, answers, titleHint); else goTab('ai'); });
   else { const built = (res.days || []).length, want = parseInt((titleHint || '').match(/(\d+)\s*日\s*$/)?.[1] || '0', 10); toast(want && built < want ? `✨ 已先排好前 ${built} 天（其餘可稍後續排）` : '✨ 行程建立完成！'); }
 }
 function homeAiCreate(text) { const t = (text || '').trim(); if (!t) return; aiCreatePlan(t); }
@@ -1672,6 +1672,19 @@ async function openShareSheet(id) {
 
     const body = clear($('#sheetBody'));
     body.appendChild(el('p', { class: 'muted', style: { fontSize: '14px', marginBottom: '10px' }, text: '管理「' + (m0 ? m0.title : '行程') + '」的存取權與成員。' }));
+
+    // ★ Simplest path first: copy ONE link, send it, they open it and they're in.
+    const genLabel = access.general === 'restricted' ? '🔒 目前限定，只有被加入的人能開' : (access.general === 'viewer' ? '🔗 任何拿到連結的人可「檢視」' : access.general === 'commenter' ? '🔗 任何拿到連結的人可「留言」' : '🔗 任何拿到連結的人可「一起編輯」');
+    body.appendChild(el('div', { style: { background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: '16px', padding: '14px', marginBottom: '16px' } }, [
+      el('.row', { style: { gap: '8px', alignItems: 'center', marginBottom: '4px' } }, [icon('i-share'), el('b', { style: { fontSize: '15px' }, text: '邀請朋友（最簡單）' })]),
+      el('.tiny.muted-3', { style: { lineHeight: '1.7', marginBottom: '10px' }, text: '複製這條連結傳給朋友（LINE／訊息都行）— 他點開就會直接加入這份行程，免登入就能看。' }),
+      el('button.btn.btn--brand.btn--block', { onclick: async () => {
+        const msg = `一起規劃「${m0 ? m0.title : '這趟旅行'}」吧！用 Plan AI 打開連結就能一起看／編輯：\n${link}`;
+        try { await navigator.clipboard.writeText(msg); toast('已複製邀請訊息，貼到 LINE／訊息傳給朋友即可 ✨'); }
+        catch { try { await navigator.clipboard.writeText(link); toast('已複製邀請連結'); } catch { toast('請往下捲動，手動複製連結'); } }
+      } }, [icon('i-copy'), '複製邀請連結']),
+      el('.tiny.muted-3', { style: { marginTop: '8px', textAlign: 'center' }, text: genLabel + (owner ? '（可在下方「一般存取權」調整）' : '') }),
+    ]));
 
     if (owner) {
       // --- Add people by email ---
