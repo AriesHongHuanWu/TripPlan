@@ -123,11 +123,12 @@ export function refreshMap(opts = {}) {
 export function refreshMapSize() { if (map) setTimeout(() => map.invalidateSize(), 60); }
 
 // ---- Per-day mini map (itinerary) ----
-let dayMap;
+let dayMap, dayMapRO;
 export function renderDayMiniMap(elId, points) {
   if (typeof L === 'undefined') return;
   ensureGesture();
   const elx = document.getElementById(elId); if (!elx) return;
+  if (dayMapRO) { try { dayMapRO.disconnect(); } catch {} dayMapRO = null; }
   if (dayMap) { try { dayMap.remove(); } catch {} dayMap = null; }
   if (!points || !points.length) return;
   dayMap = L.map(elx, {
@@ -143,9 +144,25 @@ export function renderDayMiniMap(elId, points) {
       .addTo(dayMap).bindPopup(`<b>${i + 1}. ${p.name}</b>`);
   });
   if (latlngs.length > 1) L.polyline(latlngs, { color: '#2563eb', weight: 3, opacity: .55, dashArray: '4 7' }).addTo(dayMap);
-  if (latlngs.length === 1) dayMap.setView(latlngs[0], 14);
-  else dayMap.fitBounds(latlngs, { padding: [26, 26], maxZoom: 14 });
-  setTimeout(() => { if (dayMap) dayMap.invalidateSize(); }, 140);
+  // Fit AFTER invalidateSize so the view uses the container's REAL size (avoids the tiles
+  // rendering into a small/centred box when the map was built while its page was hidden).
+  const fit = () => {
+    if (!dayMap) return;
+    try {
+      if (latlngs.length === 1) dayMap.setView(latlngs[0], 14);
+      else dayMap.fitBounds(latlngs, { padding: [26, 26], maxZoom: 14 });
+    } catch {}
+  };
+  const sync = () => { if (!dayMap) return; try { dayMap.invalidateSize(false); } catch {} fit(); };
+  fit();                                   // initial guess
+  requestAnimationFrame(sync);             // after first layout
+  setTimeout(sync, 160);                   // after any tab transition settles
+  // Self-heal: re-measure whenever the container gets/changes a real size (e.g. the 行程
+  // page is revealed on tab switch, desktop↔mobile reflow, window resize).
+  if (typeof ResizeObserver !== 'undefined') {
+    let t; dayMapRO = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(sync, 60); });
+    try { dayMapRO.observe(elx); } catch {}
+  }
 }
 function numMarker(n) {
   return `<div style="width:26px;height:26px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.35),0 0 0 2px #fff">${n}</div>`;
