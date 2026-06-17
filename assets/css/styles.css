@@ -1002,13 +1002,15 @@ main {
     grid-template-rows: auto 1fr;
     grid-template-areas: "topbar topbar" "side content";
     min-height: 100vh;
+    max-width: none; margin: 0;   /* full-bleed: the nav rail sits flush against the left edge */
   }
   #app > .appbar { grid-area: topbar; }
   #app > main { grid-area: content; padding: 22px 40px 48px; min-height: 0; }
   /* Designed-for-desktop: center each tab in a comfortable column instead of stretching a phone.
      Text/cards/chat read best in a contained width; the map page takes the full width. */
-  #page-today, #page-plan, #page-weather, #page-gift, #page-ai { max-width: 960px; margin: 0 auto; }
-  #page-route { max-width: 1120px; margin: 0 auto; }
+  #page-today, #page-plan, #page-weather, #page-gift { max-width: 1040px; margin: 0 auto; }
+  #page-ai { max-width: 980px; margin: 0 auto; }
+  #page-route { max-width: 1280px; margin: 0 auto; }
   /* AI tab: flex column that fills the content height so the chat composer is always on-screen
      (the segment above the chat takes its own space; the chat fills the rest). */
   #page-ai { display: flex; flex-direction: column; height: calc(100vh - var(--appbar-h) - 70px); min-height: 0; }

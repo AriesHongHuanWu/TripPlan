@@ -1,5 +1,5 @@
 // Service worker — offline shell + installable PWA
-const CACHE = 'planai-v38';
+const CACHE = 'planai-v39';
 const ASSETS = [
   './', 'index.html',
   'assets/css/styles.css',
