@@ -147,7 +147,7 @@ async function execTool(call) {
 // ---- API call ----
 // Model aliases drift; if the configured model 404s we transparently retry with
 // known-good fallbacks so a stale model id never breaks the whole AI.
-const MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
+const MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
 const modelMissing = (status, t) => status === 404 || /not\s*found|not\s*supported|unknown name|is not found|call ListModels/i.test(t || '');
 // Rate-limit / quota exhaustion (free-tier RPD/TPM). Different models often have
 // separate quota pools, so on 429 we try the next model before giving up.

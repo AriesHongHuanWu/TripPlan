@@ -12,9 +12,10 @@
 // rotate to the next key; across the model fallbacks too (separate quota pools).
 // You can also use AI_API_KEYS / GEMINI_API_KEYS for the list explicitly.
 
-// flash-lite has a much larger free quota → kept LAST as a quota-exhaustion safety net:
-// after every key×flash combo is rate-limited, we fall back to flash-lite so the AI still answers.
-const MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
+// Order = best→safest. flash-lite has a MUCH larger free quota, so it sits 2nd: the moment the
+// primary flash is rate-limited we jump straight to lite (instead of wasting calls on the other
+// flash tiers that share the same low free quota). The remaining tiers are extra safety nets.
+const MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
 const missing = (s, t) => s === 404 || /not found|not supported|unknown name|call ListModels/i.test(t || '');
 const rateLimited = (s, t) => s === 429 || /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(t || '');
 const badKey = (s, t) => s === 401 || s === 403 || (s === 400 && /api.?key|API_KEY_INVALID|invalid.{0,8}key/i.test(t || ''));
