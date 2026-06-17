@@ -866,11 +866,68 @@ function openSettings() {
   body.appendChild(el('.h-section', { text: '通知' }));
   renderNotifySettings(body);
 
+  // App update / cache
+  body.appendChild(el('.divider'));
+  body.appendChild(el('.h-section', { text: '應用程式 · 更新' }));
+  body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 10px', lineHeight: '1.6' }, text: '有新版本時，畫面下方會自動跳出「重新整理」提示。如果覺得內容沒更新、畫面怪怪的，可以清除離線暫存、完整重新載入最新版（你的行程資料不會被刪除）。' }));
+  body.appendChild(el('button.btn.btn--block', { onclick: async () => {
+    if (await confirmDialog({ title: '清除暫存並重新整理', message: '會清掉離線暫存並重新下載最新版本。你的行程與設定都會保留。要繼續嗎？', confirmText: '清除並重新整理' })) { toast('正在清除暫存…'); hardRefresh(); }
+  } }, ['⟳ 清除暫存並重新整理']));
+
   // About
   body.appendChild(el('.divider'));
   body.appendChild(el('.h-section', { text: '關於' }));
   body.appendChild(el('p', { class: 'tiny muted-3', style: { marginTop: '8px', lineHeight: '1.7' }, html: '九州・本州・四國 JR 自由行規劃 · 2026/06/17–06/24。<br>天氣：Open-Meteo（免金鑰）。地圖：Leaflet + OpenStreetMap/CARTO。導航：Google Maps 深連結。<br>⚠️ 班次與票價為參考值（依官方資料整理），請以即時 Google Maps / JR 官方為準。' }));
   openSheet('settingsSheet');
+}
+
+// ---- App update / cache control -------------------------------------------
+// "Stuck, just give me the freshest version": clear all caches + unregister the
+// service worker, then hard-reload. Plan data in localStorage is NOT touched.
+async function hardRefresh() {
+  try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch {}
+  try { if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } } catch {}
+  try { sessionStorage.setItem('kp_refreshed', '1'); } catch {}
+  location.reload();
+}
+let _updBanner = null;
+function showUpdateBanner() {
+  if (_updBanner || document.getElementById('updBanner')) return;   // only one at a time
+  const reloadBtn = el('button', { style: { border: 'none', borderRadius: '999px', padding: '8px 16px', background: 'var(--grad-brand, var(--brand-2, #2563eb))', color: '#fff', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }, onclick: () => { reloadBtn.textContent = '更新中…'; location.reload(); } }, '重新整理');
+  const bar = el('#updBanner', { role: 'status', style: {
+    position: 'fixed', left: '50%', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', transform: 'translateX(-50%)',
+    zIndex: '9000', display: 'flex', alignItems: 'center', gap: '10px', maxWidth: 'calc(100vw - 24px)',
+    padding: '10px 10px 10px 16px', borderRadius: '999px', background: 'var(--surface, #fff)', color: 'var(--text, #111)',
+    border: '1px solid var(--line, #e5e7eb)', boxShadow: '0 14px 36px -10px rgba(0,0,0,.45)', font: '600 14px/1.3 system-ui, -apple-system, sans-serif',
+  } }, [
+    el('span', { style: { whiteSpace: 'nowrap' }, text: '✨ 已有新版本' }),
+    reloadBtn,
+    el('button', { 'aria-label': '稍後', title: '稍後', style: { border: 'none', background: 'transparent', color: 'var(--text-3, #888)', fontSize: '17px', lineHeight: '1', cursor: 'pointer', padding: '4px 6px' }, onclick: () => { bar.remove(); _updBanner = null; } }, '✕'),
+  ]);
+  document.body.appendChild(bar); _updBanner = bar;
+}
+// Register the SW and watch for a newer deploy → show a non-intrusive reload prompt.
+function initSWUpdate() {
+  if (!('serviceWorker' in navigator)) return;
+  try { if (sessionStorage.getItem('kp_refreshed')) { sessionStorage.removeItem('kp_refreshed'); setTimeout(() => toast('已清除暫存並載入最新版 ✨'), 600); } } catch {}
+  const hadController = !!navigator.serviceWorker.controller;   // false on a first-ever install
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    if (!reg) return;
+    const check = () => { try { reg.update(); } catch {} };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner();   // a new SW was already waiting
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing; if (!nw) return;
+      nw.addEventListener('statechange', () => { if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(); });
+    });
+    // Re-check for a new deploy whenever the tab regains attention + periodically,
+    // so an already-open tab/PWA notices updates without a manual reload.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    window.addEventListener('focus', check);
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {});
+  // Backstop for auto-skipWaiting SWs: a new worker took control after we already
+  // had one → offer reload. (hadController guards the first-install case.)
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) showUpdateBanner(); });
 }
 function inputStyle() { return { width: '100%', padding: '11px 13px', borderRadius: '12px', border: '1px solid var(--line-strong)', background: 'var(--surface)', fontSize: '14px', marginTop: '4px' }; }
 
@@ -2777,8 +2834,8 @@ function init() {
   // clock — refresh Today every minute
   setInterval(() => { if (currentTab === 'today') renderToday(); if (currentTab === 'weather') renderWeatherHero(); }, 60000);
 
-  // service worker (offline / installable)
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // service worker (offline / installable) + "new version available" prompt
+  initSWUpdate();
 
   // firebase (guarded) + persist on exit
   initFirebase().then(() => { fb.onAuth(onAuthChange); if (pendingView) { const v = pendingView; pendingView = null; openPlanDetail(v); } });
