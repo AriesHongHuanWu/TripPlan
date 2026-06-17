@@ -229,66 +229,76 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
           <h2 class="gl-h2">看看它怎麼運作</h2>
         </div>
 
-        <div class="gl-show reveal">
-          <div class="gl-show__txt">
-            <span class="gl-eyebrow">AI 規劃</span>
-            <h3>從一句話，到完整行程</h3>
-            <p>只要描述目的地、天數與喜好，AI 立刻生成逐日安排。缺日期、機場或機票時，它會先問你再精準排好。</p>
-            <ul class="gl-show__list">
-              <li><svg><use href="#i-check"/></svg>支援全球任何國家與城市</li>
-              <li><svg><use href="#i-check"/></svg>自動帶入景點座標、開放時間與交通</li>
-              <li><svg><use href="#i-check"/></svg>隨時用聊天繼續微調</li>
-            </ul>
+        <div class="gl-tabs reveal" id="glShowTabs">
+          <div class="gl-tabs__nav" role="tablist" aria-label="功能展示 / Feature showcase">
+            <button class="gl-tab is-on" role="tab" id="glt-0" aria-controls="glp-0" aria-selected="true" data-tab="0"><svg aria-hidden="true"><use href="#i-ai"/></svg>AI 規劃</button>
+            <button class="gl-tab" role="tab" id="glt-1" aria-controls="glp-1" aria-selected="false" tabindex="-1" data-tab="1"><svg aria-hidden="true"><use href="#i-route"/></svg>行程 · 地圖</button>
+            <button class="gl-tab" role="tab" id="glt-2" aria-controls="glp-2" aria-selected="false" tabindex="-1" data-tab="2"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16.5 5.2a3 3 0 0 1 0 5.6M21.5 20a6.5 6.5 0 0 0-4.5-6.2"/></svg>共同編輯</button>
           </div>
-          <div class="gl-show__media">
-            <div class="mock">
-              <div class="mock__bar"><b>AI 旅伴</b><span>規劃模式</span></div>
-              <div class="mock__bub mock__bub--me">幫我排 5 天京都，多點美食</div>
-              <div class="mock__chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg>正在規劃「京都 5 天」</div>
-              <div class="mock__bub">已排好 5 天！含錦市場、伏見稻荷、嵐山與 12 間在地名店，並避開週一休館。</div>
+          <div class="gl-tabs__panels">
+            <div class="gl-tabpanel is-on" role="tabpanel" id="glp-0" aria-labelledby="glt-0" data-panel="0">
+              <div class="gl-show">
+                <div class="gl-show__txt">
+                  <h3>從一句話，到完整行程</h3>
+                  <p>只要描述目的地、天數與喜好，AI 立刻生成逐日安排。缺日期、機場或機票時，它會先問你再精準排好。</p>
+                  <ul class="gl-show__list">
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>支援全球任何國家與城市</li>
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>自動帶入景點座標、開放時間與交通</li>
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>隨時用聊天繼續微調</li>
+                  </ul>
+                </div>
+                <div class="gl-show__media">
+                  <div class="mock">
+                    <div class="mock__bar"><b>AI 旅伴</b><span>規劃模式</span></div>
+                    <div class="mock__bub mock__bub--me">幫我排 5 天京都，多點美食</div>
+                    <div class="mock__chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg>正在規劃「京都 5 天」</div>
+                    <div class="mock__bub">已排好 5 天！含錦市場、伏見稻荷、嵐山與 12 間在地名店，並避開週一休館。</div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <div class="gl-show gl-show--rev reveal">
-          <div class="gl-show__txt">
-            <span class="gl-eyebrow">行程 · 地圖</span>
-            <h3>清楚的時間軸，地圖一眼看懂</h3>
-            <p>每天的時間軸一目了然，手動拖拉或叫 AI 重排都行；互動地圖把每天的景點連成路線，到哪都不迷路。</p>
-            <ul class="gl-show__list">
-              <li><svg><use href="#i-check"/></svg>拖拉排序、即時編輯</li>
-              <li><svg><use href="#i-check"/></svg>每日路線自動連線</li>
-              <li><svg><use href="#i-check"/></svg>一鍵 Google Maps 導航</li>
-            </ul>
-          </div>
-          <div class="gl-show__media">
-            <div class="mock--map">
-              <span class="pin" style="left:24%;top:32%">🗼</span>
-              <span class="pin" style="left:62%;top:48%">⛩️</span>
-              <span class="pin" style="left:44%;top:72%">🏯</span>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M24 32 L62 48 L44 72" fill="none" stroke="var(--brand-2)" stroke-width="1.4" stroke-dasharray="3 3"/></svg>
-              <div class="tag">第 2 天 · 3 個景點 · 自動連線路線</div>
+            <div class="gl-tabpanel" role="tabpanel" id="glp-1" aria-labelledby="glt-1" data-panel="1" hidden>
+              <div class="gl-show">
+                <div class="gl-show__txt">
+                  <h3>清楚的時間軸，地圖一眼看懂</h3>
+                  <p>每天的時間軸一目了然，手動拖拉或叫 AI 重排都行；互動地圖把每天的景點連成路線，到哪都不迷路。</p>
+                  <ul class="gl-show__list">
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>拖拉排序、即時編輯</li>
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>每日路線自動連線</li>
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>一鍵 Google Maps 導航</li>
+                  </ul>
+                </div>
+                <div class="gl-show__media">
+                  <div class="mock--map">
+                    <span class="pin" style="left:24%;top:32%">🗼</span>
+                    <span class="pin" style="left:62%;top:48%">⛩️</span>
+                    <span class="pin" style="left:44%;top:72%">🏯</span>
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M24 32 L62 48 L44 72" fill="none" stroke="var(--brand-2)" stroke-width="1.4" stroke-dasharray="3 3"/></svg>
+                    <div class="tag">第 2 天 · 3 個景點 · 自動連線路線</div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <div class="gl-show reveal">
-          <div class="gl-show__txt">
-            <span class="gl-eyebrow">共同編輯</span>
-            <h3>和朋友一起規劃，即時同步</h3>
-            <p>分享一條連結，大家就能加入同一份行程一起編輯。內建群組聊天，打一句 @ai，AI 就幫所有人調整行程。</p>
-            <ul class="gl-show__list">
-              <li><svg><use href="#i-check"/></svg>多人同時編輯、即時同步</li>
-              <li><svg><use href="#i-check"/></svg>群組聊天內直接呼叫 AI</li>
-              <li><svg><use href="#i-check"/></svg>權限分明，可隨時撤回邀請</li>
-            </ul>
-          </div>
-          <div class="gl-show__media">
-            <div class="mock">
-              <div class="mock__bar"><b>同行聊天</b><span>3 人</span></div>
-              <div class="mock__bub">第三天想去看海 🌊</div>
-              <div class="mock__bub mock__bub--me">@ai 第三天加一個海邊景點</div>
-              <div class="mock__row is-ai"><i>16:00</i><span>🤖 已加入「江之島」到第 3 天</span></div>
+            <div class="gl-tabpanel" role="tabpanel" id="glp-2" aria-labelledby="glt-2" data-panel="2" hidden>
+              <div class="gl-show">
+                <div class="gl-show__txt">
+                  <h3>和朋友一起規劃，即時同步</h3>
+                  <p>分享一條連結，大家就能加入同一份行程一起編輯。內建群組聊天，打一句 @ai，AI 就幫所有人調整行程。</p>
+                  <ul class="gl-show__list">
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>多人同時編輯、即時同步</li>
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>群組聊天內直接呼叫 AI</li>
+                    <li><svg aria-hidden="true"><use href="#i-check"/></svg>權限分明，可隨時撤回邀請</li>
+                  </ul>
+                </div>
+                <div class="gl-show__media">
+                  <div class="mock">
+                    <div class="mock__bar"><b>同行聊天</b><span>3 人</span></div>
+                    <div class="mock__bub">第三天想去看海 🌊</div>
+                    <div class="mock__bub mock__bub--me">@ai 第三天加一個海邊景點</div>
+                    <div class="mock__row is-ai"><i>16:00</i><span>🤖 已加入「江之島」到第 3 天</span></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -369,13 +379,12 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
           <div class="gl-head">
             <span class="gl-eyebrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 9.5C8 19.4 5 15.4 5 11V6z"/></svg>隱私與安全</span>
             <h2 class="gl-h2">你的旅程，由你作主</h2>
-            <p class="gl-lead">Plan AI 以「本機優先」設計：你的行程預設只存在你自己的瀏覽器裡。我們不販售你的資料、沒有廣告追蹤。</p>
+            <p class="gl-lead">Plan AI 以「本機優先」設計：你的行程預設只存在你自己的瀏覽器裡，完全由你掌控。</p>
           </div>
           <div class="gl-priv__grid">
             <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><div><h4>本機優先儲存</h4><p>行程預設存在你裝置的瀏覽器，不上傳就完全離線可用。</p></div></div>
             <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 9.5C8 19.4 5 15.4 5 11V6z"/><path d="M9 12l2 2 4-4"/></svg><div><h4>選擇性雲端同步</h4><p>登入 Google 後才會把行程安全同步到你的私人空間，方便跨裝置。</p></div></div>
-            <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg><div><h4>不販售・無廣告</h4><p>我們不販售你的個人資料，也沒有第三方廣告追蹤。</p></div></div>
-            <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg><div><h4>AI 僅用於規劃</h4><p>你的輸入只會傳給 AI 引擎產生行程，不會被用來投放廣告。</p></div></div>
+            <div class="gl-priv__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l1.9 5.1a4 4 0 0 0 2.4 2.4l5.2 2-5.2 1.9a4 4 0 0 0-2.4 2.4L12 21.5l-1.9-5.2a4 4 0 0 0-2.4-2.4L2.5 12l5.2-1.9a4 4 0 0 0 2.4-2.4Z"/></svg><div><h4>AI 僅用於規劃</h4><p>你的輸入只會用來為你產生行程，僅此而已。</p></div></div>
           </div>
           <div class="gl-priv__docs">
             <button class="gl-btn gl-btn--sm" data-legal="privacy">隱私權政策</button>
@@ -398,7 +407,7 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
           <div class="gl-faq__item"><button class="gl-faq__q">Plan AI 真的免費嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>是的，核心功能完全免費，沒有訂閱也不需要信用卡。你只要打開網站就能開始規劃。</p></div></div>
           <div class="gl-faq__item"><button class="gl-faq__q">需要下載安裝嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>不用。Plan AI 是漸進式網頁應用（PWA），用瀏覽器即可使用；也能「加入主畫面」像 App 一樣開啟並離線瀏覽已存的行程。</p></div></div>
           <div class="gl-faq__item"><button class="gl-faq__q">支援哪些國家？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>全球任何國家與城市都能規劃。內建一份「日本九州・瀨戶內・關西」的範本行程，你可以直接複製來改，或讓 AI 從零幫你建立。</p></div></div>
-          <div class="gl-faq__item"><button class="gl-faq__q">我的資料安全嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>行程預設只存在你裝置的瀏覽器。只有在你登入 Google 並開啟同步時，才會安全地存到你的私人雲端空間。我們不販售資料、沒有廣告追蹤。詳見隱私權政策。</p></div></div>
+          <div class="gl-faq__item"><button class="gl-faq__q">我的資料安全嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>行程預設只存在你裝置的瀏覽器。只有在你登入 Google 並開啟同步時，才會安全地存到你的私人雲端空間。詳見隱私權政策。</p></div></div>
           <div class="gl-faq__item"><button class="gl-faq__q">可以離線使用嗎？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>可以。安裝後，已開啟過的行程、地圖與資料會被快取，沒有網路時仍能查看；AI 生成與即時天氣則需要連線。</p></div></div>
           <div class="gl-faq__item"><button class="gl-faq__q">怎麼和朋友一起規劃？<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button><div class="gl-faq__a"><p>開啟行程的「邀請」功能、分享連結，朋友點開就能加入同一份行程一起即時編輯，還能在群組聊天裡 @ai 請 AI 幫忙調整。</p></div></div>
         </div>
@@ -826,6 +835,26 @@ import { t, getLang, setLang } from './assets/js/i18n.js';
       a.style.maxHeight = open ? (a.scrollHeight + 'px') : '0px';
     });
   });
+
+  // ---- Tabbed showcase (小分頁): cross-fade panels, keyboard-accessible ----
+  (function () {
+    var tabs = [].slice.call(document.querySelectorAll('#glShowTabs .gl-tab'));
+    var panels = [].slice.call(document.querySelectorAll('#glShowTabs .gl-tabpanel'));
+    if (!tabs.length) return;
+    function activate(n) {
+      tabs.forEach(function (tb, i) { var on = i === n; tb.classList.toggle('is-on', on); tb.setAttribute('aria-selected', String(on)); tb.tabIndex = on ? 0 : -1; });
+      panels.forEach(function (p, i) { var on = i === n; p.hidden = !on; p.classList.toggle('is-on', on); });
+    }
+    tabs.forEach(function (tb, i) {
+      tb.addEventListener('click', function () { activate(i); });
+      tb.addEventListener('keydown', function (e) {
+        var n = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? (i + 1) % tabs.length
+          : (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ? (i - 1 + tabs.length) % tabs.length : -1;
+        if (n < 0) return;
+        e.preventDefault(); activate(n); tabs[n].focus();
+      });
+    });
+  })();
 
   var modal = document.getElementById('glModal'), mTitle = document.getElementById('glModalTitle'), mBody = document.getElementById('glModalBody'), lastFocus = null;
   function openLegal(key) {

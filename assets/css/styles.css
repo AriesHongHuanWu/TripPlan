@@ -1456,3 +1456,24 @@ main {
   .gl-hero__bg { animation: glHeroDrift 18s ease-in-out infinite alternate; will-change: transform, opacity; }
 }
 @keyframes glHeroDrift { from { transform: translate3d(-2%,-1%,0) scale(1.03); opacity:.78; } to { transform: translate3d(2%,1.5%,0) scale(1.07); opacity:1; } }
+
+/* ---- tabbed showcase (小分頁) ---- */
+.gl-tabs__nav { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:38px 0 30px; }
+.gl-tab { display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius:999px; font-size:15px; font-weight:650;
+  color:var(--text-2); background:var(--surface-2); border:1px solid transparent; cursor:pointer;
+  transition:background .2s, color .2s, box-shadow .25s, transform .15s; }
+.gl-tab:hover { color:var(--text); background:var(--surface-3); transform:translateY(-1px); }
+.gl-tab.is-on { color:#fff; background:var(--brand-2); box-shadow:0 8px 20px color-mix(in srgb,var(--brand-2) 34%, transparent); }
+.gl-tab svg { width:17px; height:17px; }
+.gl-tabpanel[hidden] { display:none; }
+@media (prefers-reduced-motion: no-preference) { .gl-tabpanel.is-on { animation: glTabIn .45s var(--ease); } }
+@keyframes glTabIn { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+
+/* ---- staggered scroll-reveal for the feature & steps grids ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .gl-grid.reveal, .gl-steps.reveal { opacity:1; transform:none; }
+  .gl-grid > .gl-card, .gl-steps > .gl-step { opacity:0; transform:translateY(20px); transition:opacity .55s var(--ease), transform .55s var(--ease); }
+  .gl-grid.in > .gl-card, .gl-steps.in > .gl-step { opacity:1; transform:none; }
+  .gl-grid.in > *:nth-child(2){transition-delay:.05s} .gl-grid.in > *:nth-child(3){transition-delay:.1s} .gl-grid.in > *:nth-child(4){transition-delay:.15s} .gl-grid.in > *:nth-child(5){transition-delay:.2s} .gl-grid.in > *:nth-child(6){transition-delay:.25s} .gl-grid.in > *:nth-child(7){transition-delay:.3s} .gl-grid.in > *:nth-child(8){transition-delay:.35s}
+  .gl-steps.in > *:nth-child(2){transition-delay:.08s} .gl-steps.in > *:nth-child(3){transition-delay:.16s} .gl-steps.in > *:nth-child(4){transition-delay:.24s}
+}
