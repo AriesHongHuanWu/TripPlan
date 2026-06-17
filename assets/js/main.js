@@ -1147,15 +1147,23 @@ function fmtAgo(ts) {
   if (h < 24) return h + ' 小時前'; return Math.floor(h / 24) + ' 天前';
 }
 
+// Run a DOM-swap inside a View Transition for a smooth cross-fade; no-op fallback
+// where unsupported or when the user prefers reduced motion.
+function withVT(fn) {
+  if (!document.startViewTransition || reduceMotion()) { fn(); return; }
+  try { document.startViewTransition(fn); } catch { fn(); }
+}
 function showScreen(name) {
-  ['home', 'plans'].forEach(s => { const e = $('#screen-' + s); if (e) e.hidden = name !== s; });
-  const app = $('#app'); if (app) app.hidden = name !== 'app';
-  if (name !== 'app') closeSheets();
-  if (name === 'home') renderHome();
-  if (name === 'plans') renderPlans();
-  if (name === 'app') maybeNotifyIntro();
-  if (name === 'plans' || name === 'app') maybeOnboard();   // first-run tutorial → add to home screen
-  window.scrollTo({ top: 0 });
+  withVT(() => {
+    ['home', 'plans'].forEach(s => { const e = $('#screen-' + s); if (e) e.hidden = name !== s; });
+    const app = $('#app'); if (app) app.hidden = name !== 'app';
+    if (name !== 'app') closeSheets();
+    if (name === 'home') renderHome();
+    if (name === 'plans') renderPlans();
+    if (name === 'app') maybeNotifyIntro();
+    if (name === 'plans' || name === 'app') maybeOnboard();   // first-run tutorial → add to home screen
+    window.scrollTo({ top: 0 });
+  });
 }
 
 function templateSnapshot() { return { v: 3, ts: Date.now(), model: kyushuModel(), extras: {} }; }
