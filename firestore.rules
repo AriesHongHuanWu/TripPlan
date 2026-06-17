@@ -108,11 +108,30 @@ service cloud.firestore {
             && likeCountSane()                              // never negative
             && (genuineLike() || genuineUnlike());
       }
+      // Review counters move IN LOCK-STEP with the caller's own review doc (same transaction).
+      function myReview() { return /databases/$(database)/documents/feed/$(code)/reviews/$(request.auth.uid); }
+      function reviewCountDelta() { return request.resource.data.get('reviewCount', 0) - resource.data.get('reviewCount', 0); }
+      function ratingSumDelta() { return request.resource.data.get('ratingSum', 0) - resource.data.get('ratingSum', 0); }
+      function reviewAdd()  { return reviewCountDelta() == 1  && !exists(myReview()) && existsAfter(myReview()) && ratingSumDelta() == getAfter(myReview()).data.rating; }
+      function reviewEdit() { return reviewCountDelta() == 0  && exists(myReview()) && existsAfter(myReview()) && ratingSumDelta() == getAfter(myReview()).data.rating - get(myReview()).data.rating; }
+      function reviewDel()  { return reviewCountDelta() == -1 && exists(myReview()) && !existsAfter(myReview()) && ratingSumDelta() == 0 - get(myReview()).data.rating; }
+      function reviewUpdate() {
+        return signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewCount', 'ratingSum', 'updatedAt'])
+            && request.resource.data.get('reviewCount', 0) >= 0
+            && (reviewAdd() || reviewEdit() || reviewDel());
+      }
+      // Any signed-in user may bump forkCount by exactly +1 (copying a plan; low-stakes, no marker).
+      function forkBump() {
+        return signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['forkCount', 'updatedAt'])
+            && (request.resource.data.get('forkCount', 0) - resource.data.get('forkCount', 0)) == 1;
+      }
 
       allow get, list: if true;                                  // public discovery + fork
       allow create:    if isFeedOwner() && likeCountSane();
-      // Like branch FIRST so a normal like never needs get(collab) (and still works if collab is private).
-      allow update:    if likeUpdate() || (isFeedOwner() && likeCountSane());
+      // Cheap public branches FIRST so a like/review/fork never needs get(collab).
+      allow update:    if likeUpdate() || reviewUpdate() || forkBump() || (isFeedOwner() && likeCountSane());
       // Self-authorizing via the feed doc's own owner field, so delisting still works after collab is gone.
       allow delete:    if signedIn() && request.auth.uid == resource.data.get('owner', '');
 
@@ -121,6 +140,37 @@ service cloud.firestore {
         allow get, list:     if true;                            // counts/state are public
         allow create, delete: if signedIn() && request.auth.uid == uid;
         allow update:        if false;                           // likes are immutable
+      }
+
+      // one review per user (doc id == uid); rating 1-5, text <=600. Edit-in-place.
+      match /reviews/{uid} {
+        function feedOwner() { return get(/databases/$(database)/documents/feed/$(code)).data.get('owner', ''); }
+        function validReview() {
+          return request.resource.data.rating is int
+              && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+              && request.resource.data.text.size() <= 600;
+        }
+        // A voter (≠ the review author) may move ONLY the `helpful` counter by ±1, in lock-step
+        // with their own one-per-voter helpful doc (same transaction).
+        function myVote() { return /databases/$(database)/documents/feed/$(code)/reviews/$(uid)/helpful/$(request.auth.uid); }
+        function helpfulDelta() { return request.resource.data.get('helpful', 0) - resource.data.get('helpful', 0); }
+        function helpfulUpdate() {
+          return signedIn()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['helpful'])
+              && ( (helpfulDelta() == 1  && !exists(myVote()) && existsAfter(myVote()))
+                || (helpfulDelta() == -1 &&  exists(myVote()) && !existsAfter(myVote())) );
+        }
+        allow get, list: if true;
+        allow create:    if signedIn() && request.auth.uid == uid && validReview();
+        allow update:    if (signedIn() && request.auth.uid == uid && validReview()) || helpfulUpdate();
+        allow delete:    if signedIn() && (request.auth.uid == uid || request.auth.uid == feedOwner());  // self or plan owner (moderation)
+
+        // helpful votes — one per voter
+        match /helpful/{voter} {
+          allow get, list:      if true;
+          allow create, delete: if signedIn() && request.auth.uid == voter;
+          allow update:         if false;
+        }
       }
     }
   }

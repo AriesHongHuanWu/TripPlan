@@ -150,10 +150,10 @@ export async function feedPublish(code, meta) {
   if (!db) throw new Error('需登入雲端才能發佈');
   if (!_user) throw new Error('請先登入');
   let existing = null; try { existing = await feedGet(code); } catch {}
-  const payload = { ...meta, code, owner: _user.uid, updatedAt: Date.now() };
+  const payload = { ...meta, code, owner: _user.uid, ownerPhoto: (_user.photoURL || ''), updatedAt: Date.now() };
   // Seed counters ONLY on first publish; on re-publish (merge) the server values are left untouched,
-  // so a metadata/tag edit can never clobber a concurrent like (F.increment) — no lost update.
-  if (!existing) { payload.likeCount = 0; payload.createdAt = Date.now(); }
+  // so a metadata/tag edit can never clobber a concurrent like/review/fork (F.increment) — no lost update.
+  if (!existing) { payload.likeCount = 0; payload.reviewCount = 0; payload.ratingSum = 0; payload.forkCount = 0; payload.createdAt = Date.now(); }
   await F.setDoc(F.doc(db, 'feed', code), payload, { merge: true });
 }
 export async function feedUnpublish(code) {
@@ -195,6 +195,81 @@ export async function feedLikedSet(codes) {
   if (!db || !_user || !codes || !codes.length) return out;
   await Promise.all(codes.map(async code => {
     try { if ((await F.getDoc(F.doc(db, 'feed', code, 'likes', _user.uid))).exists()) out.add(code); } catch {}
+  }));
+  return out;
+}
+// Bump forkCount when someone copies a community plan (best-effort; rules allow a signed-in +1).
+export async function feedBumpFork(code) {
+  if (!db || !_user) return;
+  try { await F.updateDoc(F.doc(db, 'feed', code), { forkCount: F.increment(1), updatedAt: Date.now() }); } catch (e) { console.warn('feedBumpFork', e); }
+}
+
+// ---- Reviews / 見解 (one per user at feed/{code}/reviews/{uid}; counts denormalized on feed) ----
+// reviewCount + ratingSum are updated IN THE SAME transaction as the review doc, in lock-step with
+// the per-uid doc transition, so the rules can bind them and they can't be forged.
+export async function reviewSave(code, { rating, text }) {
+  if (!db || !_user) throw new Error('請先登入再寫心得');
+  const r = Math.max(1, Math.min(5, parseInt(rating, 10) || 0));
+  const body = String(text || '').slice(0, 600);
+  const name = _user.displayName || (_user.email || '').split('@')[0] || '旅人';
+  const photo = _user.photoURL || '';
+  const revRef = F.doc(db, 'feed', code, 'reviews', _user.uid);
+  const feedRef = F.doc(db, 'feed', code);
+  return await F.runTransaction(db, async tx => {
+    const snap = await tx.get(revRef); const now = Date.now();
+    if (!snap.exists()) {
+      tx.set(revRef, { uid: _user.uid, name, photo, rating: r, text: body, helpful: 0, createdAt: now, updatedAt: now });
+      tx.update(feedRef, { reviewCount: F.increment(1), ratingSum: F.increment(r), updatedAt: now });
+    } else {
+      const old = snap.data().rating || 0;
+      tx.update(revRef, { rating: r, text: body, name, photo, updatedAt: now });
+      tx.update(feedRef, { ratingSum: F.increment(r - old), updatedAt: now });
+    }
+    return true;
+  });
+}
+export async function reviewDelete(code) {
+  if (!db || !_user) throw new Error('請先登入');
+  const revRef = F.doc(db, 'feed', code, 'reviews', _user.uid);
+  const feedRef = F.doc(db, 'feed', code);
+  return await F.runTransaction(db, async tx => {
+    const snap = await tx.get(revRef); if (!snap.exists()) return false;
+    const r = snap.data().rating || 0;
+    tx.delete(revRef);
+    tx.update(feedRef, { reviewCount: F.increment(-1), ratingSum: F.increment(-r), updatedAt: Date.now() });
+    return true;
+  });
+}
+export async function reviewList(code, max = 50) {
+  if (!db) return [];
+  try {
+    const q = F.query(F.collection(db, 'feed', code, 'reviews'), F.orderBy('createdAt', 'desc'), F.limit(max));
+    const snap = await F.getDocs(q);
+    return snap.docs.map(d => d.data());
+  } catch (e) { console.warn('reviewList', e); return []; }
+}
+export async function reviewGetMine(code) {
+  if (!db || !_user) return null;
+  try { const s = await F.getDoc(F.doc(db, 'feed', code, 'reviews', _user.uid)); return s.exists() ? s.data() : null; }
+  catch { return null; }
+}
+// Helpful votes — one per voter under each review, count denormalized on the review doc.
+export async function reviewHelpfulToggle(code, reviewUid, on) {
+  if (!db || !_user) throw new Error('請先登入');
+  const voteRef = F.doc(db, 'feed', code, 'reviews', reviewUid, 'helpful', _user.uid);
+  const revRef = F.doc(db, 'feed', code, 'reviews', reviewUid);
+  return await F.runTransaction(db, async tx => {
+    const has = (await tx.get(voteRef)).exists();
+    if (on && !has) { tx.set(voteRef, { uid: _user.uid, ts: Date.now() }); tx.update(revRef, { helpful: F.increment(1) }); return true; }
+    if (!on && has) { tx.delete(voteRef); tx.update(revRef, { helpful: F.increment(-1) }); return false; }
+    return has;
+  });
+}
+export async function reviewHelpfulSet(code, reviewUids) {
+  const out = new Set();
+  if (!db || !_user || !reviewUids || !reviewUids.length) return out;
+  await Promise.all(reviewUids.map(async ru => {
+    try { if ((await F.getDoc(F.doc(db, 'feed', code, 'reviews', ru, 'helpful', _user.uid))).exists()) out.add(ru); } catch {}
   }));
   return out;
 }

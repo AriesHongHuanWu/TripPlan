@@ -11,7 +11,7 @@ import { renderWeatherCity, getCurrentSummary, clothingAdvice } from './weather.
 import { initMap, refreshMap, refreshMapSize, focusPlace, jrSchematicHTML, renderDayMiniMap } from './map.js';
 import { initGemini, getCfg, generateTripPlan } from './ai.js';
 import { initToolkit, closeToolkit } from './toolkit.js';
-import { initFirebase, fb, signInGoogle, signOutUser, authErrorMessage, pullUserData, pushUserData, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs, collabSetGeneral, collabSetPersonRole, collabRemovePerson, collabDelete, collabModelGet, feedReady, feedPublish, feedUnpublish, feedList, feedGet, feedLikeToggle, feedLikedSet } from './firebase.js';
+import { initFirebase, fb, signInGoogle, signOutUser, authErrorMessage, pullUserData, pushUserData, shareGet, collabReady, collabSave, collabGet, collabJoin, collabSetPlan, collabOnDoc, collabSendMsg, collabOnMsgs, collabSetGeneral, collabSetPersonRole, collabRemovePerson, collabDelete, collabModelGet, feedReady, feedPublish, feedUnpublish, feedList, feedGet, feedLikeToggle, feedLikedSet, feedBumpFork, reviewSave, reviewDelete, reviewList, reviewGetMine, reviewHelpfulToggle, reviewHelpfulSet } from './firebase.js';
 import * as Notify from './notify.js';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1155,7 +1155,7 @@ function withVT(fn) {
 }
 function showScreen(name) {
   withVT(() => {
-    ['home', 'plans'].forEach(s => { const e = $('#screen-' + s); if (e) e.hidden = name !== s; });
+    ['home', 'plans', 'detail'].forEach(s => { const e = $('#screen-' + s); if (e) e.hidden = name !== s; });
     const app = $('#app'); if (app) app.hidden = name !== 'app';
     if (name !== 'app') closeSheets();
     if (name === 'home') renderHome();
@@ -1800,6 +1800,8 @@ function importSharedFromURL() {
   const sp = new URLSearchParams(location.search);
   const join = sp.get('join');
   if (join) { history.replaceState(null, '', location.pathname); joinCollab(join); return true; }
+  const view = sp.get('view');
+  if (view) { history.replaceState(null, '', location.pathname); store.set('kp_entered', true); pendingView = view; return true; }   // opened after Firebase is ready
   const c = sp.get('plan');
   if (c) { history.replaceState(null, '', location.pathname); importSharedCode(c); return true; }
   return false;
@@ -2273,13 +2275,22 @@ function communityCard(f) {
   const rg = f.region || regionOf(f.country); if (rg && rg !== f.country) bits.push(rg);
   if (f.days) bits.push(f.days + ' 天');
   if (f.cityCount) bits.push(f.cityCount + ' 城');
-  return el('.plan-card.plan-card--community', { onclick: () => openCommunityPreview(f) }, [
+  const a = avg5(f);
+  const social = [];
+  if (a) social.push('★ ' + a.toFixed(1));
+  if (f.forkCount) social.push('🔁 ' + f.forkCount);
+  if (f.reviewCount) social.push('💬 ' + f.reviewCount);
+  return el('.plan-card.plan-card--community', { onclick: () => openPlanDetail(f) }, [
     el('.plan-card__ico', { text: f.emoji || '🗺️' }),
     el('.plan-card__body', {}, [
       el('.plan-card__title', { text: f.title || '行程' }),
       el('.plan-card__meta', {}, [bits.length ? el('span', { text: bits.join(' · ') }) : null]),
       (f.themes && f.themes.length) ? el('.community-tags', {}, f.themes.slice(0, 3).map(t => el('span.chip.chip--mini', { text: t }))) : null,
-      el('.tiny.muted-3', { style: { marginTop: '4px' }, text: '由 ' + (f.ownerName || '旅人') + ' 分享' }),
+      el('.community-card__foot', {}, [
+        avatarEl(f.ownerName, f.ownerPhoto, '.avatar--xs'),
+        el('span.tiny.muted-3', { text: f.ownerName || '旅人' }),
+        social.length ? el('span.tiny.muted-3.community-card__social', { text: social.join(' · ') }) : null,
+      ]),
     ]),
     el('.plan-card__actions', {}, [
       likeButton(f),
@@ -2325,35 +2336,158 @@ async function forkFromFeed(f) {
   if (!model || !(model.days || []).length) { toast('此行程目前無法複製（可能已不公開）'); return; }
   const id = createPlan({ title: (f.title || '社群行程') + '（社群副本）', model, base: 'fork', emoji: f.emoji || '🗺️' });
   const arr = plansMeta(); const m = arr.find(p => p.id === id); if (m) { m.forkedFrom = f.code; setPlansMeta(arr); }
+  try { feedBumpFork(f.code); } catch {}            // social proof: "X 人複製"
+  communityLoaded = false;
   communityTab(false);
   openPlan(id);
   toast('已複製到你的計劃，可自由編輯 ✏️');
 }
-// Read-only preview of a community plan (no import) with a fork CTA.
-async function openCommunityPreview(f) {
-  const title = f.title || '社群行程';
-  $('#sheetTitle').textContent = title;
-  const b = clear($('#sheetBody'));
-  openSheet('sheet');
+
+// ============================================================================
+// Community plan DETAIL page — hero + author + stats + 行程/心得 tabs + reviews.
+// Deep-linkable via ?view=<code>. Replaces the old transient preview sheet.
+// ============================================================================
+let detailState = null;
+let pendingView = null;   // ?view=<code> deep-link, opened once Firebase is ready
+const avg5 = f => (f && f.reviewCount ? (f.ratingSum || 0) / f.reviewCount : 0);
+function avatarEl(name, photo, cls = '') {
+  if (photo) return el('img.avatar' + cls, { src: photo, alt: '', referrerpolicy: 'no-referrer' });
+  return el('.avatar.avatar--init' + cls, { text: (name || '旅')[0] });
+}
+function starsRow(rating) { const o = []; for (let i = 1; i <= 5; i++) o.push(el('span' + (i <= rating ? '' : '.is-off'), { text: '★' })); return el('.stars', {}, o); }
+
+async function openPlanDetail(arg) {
+  const code = typeof arg === 'string' ? arg : (arg && arg.code);
+  if (!code) return;
+  if (!feedReady()) { toast('社群需要連接雲端'); return; }
+  detailState = { code, feed: (typeof arg === 'object' ? arg : null), model: null, reviews: [], helpfulSet: new Set(), tab: 'itin', loaded: false };
+  showScreen('detail');
+  renderDetail();
+  try {
+    const [feed, model, reviews] = await Promise.all([
+      detailState.feed ? Promise.resolve(detailState.feed) : feedGet(code),
+      collabModelGet(code),
+      reviewList(code),
+    ]);
+    if (!detailState || detailState.code !== code) return;   // navigated away mid-load
+    detailState.feed = feed || detailState.feed; detailState.model = model; detailState.reviews = reviews || []; detailState.loaded = true;
+    if (fb.user && detailState.reviews.length) { try { detailState.helpfulSet = await reviewHelpfulSet(code, detailState.reviews.map(r => r.uid)); } catch {} }
+    renderDetail();
+  } catch (e) { console.warn('detail load', e); if (detailState) { detailState.loaded = true; renderDetail(); } }
+}
+function renderDetail() {
+  const root = $('#detailRoot'); if (!root || !detailState) return;
+  const f = detailState.feed || { code: detailState.code };
+  clear(root);
   const bits = []; if (f.country) bits.push(f.country); const rg = f.region || regionOf(f.country); if (rg && rg !== f.country) bits.push(rg); if (f.days) bits.push(f.days + ' 天'); if (f.cityCount) bits.push(f.cityCount + ' 城');
-  b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: (f.emoji || '🗺️') + ' ' + bits.join(' · ') + ' · 由 ' + (f.ownerName || '旅人') + ' 分享' }));
-  if (f.themes && f.themes.length) b.appendChild(el('.community-tags', { style: { margin: '8px 0' } }, f.themes.map(t => el('span.chip.chip--mini', { text: t }))));
-  b.appendChild(el('.tiny.muted-3', { style: { margin: '4px 0 8px' }, text: '👁 此為社群公開行程（唯讀）。複製到你的計劃後即可自由編輯。' }));
-  const loading = el('.tiny.muted-3', { style: { margin: '12px 0' }, text: '載入行程內容…' });
-  b.appendChild(loading);
-  let model = null; try { model = await collabModelGet(f.code); } catch {}
-  if ($('#sheetTitle').textContent !== title) return;   // sheet changed while awaiting
-  loading.remove();
-  const days = (model && model.days) || [];
-  if (!days.length) b.appendChild(el('.tiny.muted-3', { text: '無法載入內容，可能已不公開。' }));
-  else days.forEach((d, i) => {
-    b.appendChild(el('.h-section', { style: { margin: '14px 2px 6px' }, text: 'Day ' + (i + 1) + (d.title ? ' · ' + d.title : '') + (d.date ? '（' + d.date + '）' : '') }));
-    (d.items || []).forEach(it => b.appendChild(el('.preview-item', {}, [
-      el('span.preview-item__t', { text: it.time || '' }),
-      el('span.preview-item__x', { text: it.title || '' }),
-    ])));
+  const a = avg5(f);
+  // hero
+  root.appendChild(el('.detail-hero', {}, [
+    el('.detail-hero__emoji', { text: f.emoji || '🗺️' }),
+    el('h1.detail-hero__title', { text: f.title || '社群行程' }),
+    bits.length ? el('.detail-hero__meta', { text: bits.join(' · ') }) : null,
+    (f.themes && f.themes.length) ? el('.community-tags', { style: { justifyContent: 'center', marginTop: '8px' } }, f.themes.slice(0, 4).map(t => el('span.chip.chip--mini', { text: t }))) : null,
+  ]));
+  // author
+  root.appendChild(el('.detail-author', {}, [avatarEl(f.ownerName, f.ownerPhoto, '.avatar--sm'), el('.detail-author__name', { text: '由 ' + (f.ownerName || '旅人') + ' 分享' })]));
+  // stats
+  root.appendChild(el('.detail-stats', {}, [
+    el('.detail-stat', {}, [el('.detail-stat__n', { text: '♥ ' + (f.likeCount || 0) }), el('.detail-stat__l', { text: '讚' })]),
+    el('.detail-stat', {}, [el('.detail-stat__n', { text: '🔁 ' + (f.forkCount || 0) }), el('.detail-stat__l', { text: '複製' })]),
+    el('.detail-stat', {}, [el('.detail-stat__n', { text: '★ ' + (a ? a.toFixed(1) : '—') }), el('.detail-stat__l', { text: '評分' })]),
+    el('.detail-stat', {}, [el('.detail-stat__n', { text: '💬 ' + (f.reviewCount || 0) }), el('.detail-stat__l', { text: '心得' })]),
+  ]));
+  // tabs
+  const seg = el('.plans-seg', { style: { margin: '6px 0 14px' } }, [
+    el('button.plans-seg__btn' + (detailState.tab === 'itin' ? '.is-on' : ''), { onclick: () => { detailState.tab = 'itin'; renderDetail(); } }, '行程'),
+    el('button.plans-seg__btn' + (detailState.tab === 'reviews' ? '.is-on' : ''), { onclick: () => { detailState.tab = 'reviews'; renderDetail(); } }, '心得' + (f.reviewCount ? ' · ' + f.reviewCount : '')),
+  ]);
+  root.appendChild(seg);
+  const body = el('div', { id: 'detailBody' }); root.appendChild(body);
+  if (detailState.tab === 'itin') renderDetailItinerary(body); else renderDetailReviews(body);
+  // sticky action bar
+  const bar = $('#detailActions'); if (bar) {
+    clear(bar);
+    bar.appendChild(el('button.btn.btn--brand', { style: { flex: '1 1 auto' }, onclick: () => forkFromFeed(f) }, [icon('i-copy'), '複製到我的計劃']));
+    bar.appendChild(el('button.btn', { onclick: () => shareDetailLink(f) }, [icon('i-share'), '分享']));
+  }
+}
+function renderDetailItinerary(body) {
+  clear(body);
+  if (!detailState.loaded && !detailState.model) { for (let i = 0; i < 5; i++) body.appendChild(el('.skeleton.skeleton--line', { style: { margin: '10px 0' } })); return; }
+  const days = (detailState.model && detailState.model.days) || [];
+  if (!days.length) { body.appendChild(el('.tiny.muted-3', { style: { padding: '20px', textAlign: 'center' }, text: '此行程目前無法瀏覽（可能已設為私人）。' })); return; }
+  days.forEach((d, i) => {
+    body.appendChild(el('.h-section', { style: { margin: '14px 2px 6px' }, text: 'Day ' + (i + 1) + (d.title ? ' · ' + d.title : '') + (d.date ? '（' + d.date + '）' : '') }));
+    (d.items || []).forEach(it => body.appendChild(el('.preview-item', {}, [el('span.preview-item__t', { text: it.time || '' }), el('span.preview-item__x', { text: it.title || '' })])));
   });
-  b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '16px' }, onclick: () => { closeSheets(); forkFromFeed(f); } }, [icon('i-copy'), '複製到我的計劃（可編輯）']));
+}
+function renderDetailReviews(body) {
+  clear(body);
+  const code = detailState.code;
+  if (fb.user) body.appendChild(reviewComposer(code));
+  else body.appendChild(el('.tiny.muted-3', { style: { margin: '4px 2px 14px', lineHeight: '1.7' }, text: '登入後即可為這份行程寫下你的評分與心得。' }));
+  const reviews = (detailState.reviews || []).slice().sort((x, y) => (y.helpful || 0) - (x.helpful || 0) || (y.createdAt || 0) - (x.createdAt || 0));
+  if (!reviews.length) { body.appendChild(el('.tiny.muted-3', { style: { textAlign: 'center', padding: '22px' }, text: '還沒有人寫心得，當第一個分享心得的人吧！' })); return; }
+  reviews.forEach(r => body.appendChild(reviewCard(code, r)));
+}
+function reviewComposer(code) {
+  const mine = (detailState.reviews || []).find(r => fb.user && r.uid === fb.user.uid);
+  let rating = mine ? mine.rating : 0;
+  const card = el('.review-compose', {});
+  card.appendChild(el('.tiny.muted-3', { style: { fontWeight: '700', marginBottom: '6px' }, text: mine ? '編輯你的心得' : '寫下你的心得' }));
+  const starRow = el('.stars-input', {});
+  const draw = () => { clear(starRow); for (let i = 1; i <= 5; i++) { const s = i; starRow.appendChild(el('button.star-btn' + (s <= rating ? '.is-on' : ''), { type: 'button', 'aria-label': s + ' 星', onclick: () => { rating = s; draw(); } }, '★')); } };
+  draw(); card.appendChild(starRow);
+  const ta = el('textarea.review-ta', { rows: 3, maxlength: '600', placeholder: '這趟行程的亮點、踩雷、給後人的建議…（最多 600 字）' }); ta.value = mine ? (mine.text || '') : '';
+  card.appendChild(ta);
+  card.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '8px' }, onclick: async () => {
+    if (!rating) { toast('請先點星星給個評分'); return; }
+    try { await reviewSave(code, { rating, text: ta.value.trim() }); toast(mine ? '已更新心得' : '已送出心得 🙌'); await reloadDetailReviews(); }
+    catch (e) { toast('送出失敗：' + (e && e.message || '')); }
+  } }, [mine ? '更新心得' : '送出心得']));
+  if (mine) card.appendChild(el('button.btn.btn--block', { style: { marginTop: '6px', color: 'var(--sakura)' }, onclick: async () => {
+    if (!await confirmDialog({ title: '刪除心得', message: '刪除你寫的心得？', confirmText: '刪除', danger: true })) return;
+    try { await reviewDelete(code); toast('已刪除'); await reloadDetailReviews(); } catch (e) { toast('刪除失敗：' + (e && e.message || '')); }
+  } }, ['刪除我的心得']));
+  return card;
+}
+function reviewCard(code, r) {
+  const helped = detailState.helpfulSet.has(r.uid);
+  return el('.review-card', {}, [
+    el('.review-card__head', {}, [
+      avatarEl(r.name, r.photo, '.avatar--sm'),
+      el('div', { style: { flex: '1 1 auto', minWidth: '0' } }, [el('.review-card__name', { text: r.name || '旅人' }), starsRow(r.rating)]),
+      r.forked ? el('span.chip.chip--mini', { text: '✓ 已造訪' }) : null,
+    ]),
+    r.text ? el('.review-card__text', { text: r.text }) : null,
+    el('.review-card__foot', {}, [
+      el('button.like-badge' + (helped ? '.is-on' : ''), { onclick: async e => {
+        const b = e.currentTarget; if (!fb.user) { toast('請先登入'); return; } if (b.dataset.busy) return; b.dataset.busy = '1';
+        try { const now = await reviewHelpfulToggle(code, r.uid, !helped); if (now) detailState.helpfulSet.add(r.uid); else detailState.helpfulSet.delete(r.uid); r.helpful = Math.max(0, (r.helpful || 0) + (now ? 1 : -1)); renderDetail(); }
+        catch { toast('操作失敗，請再試一次'); } finally { delete b.dataset.busy; }
+      } }, [el('span.like-badge__heart', { text: '👍' }), el('span.like-badge__n', { text: String(r.helpful || 0) })]),
+      el('.tiny.muted-3', { text: fmtAgo(r.createdAt) }),
+    ]),
+  ]);
+}
+async function reloadDetailReviews() {
+  const code = detailState && detailState.code; if (!code) return;
+  try {
+    const [feed, reviews] = await Promise.all([feedGet(code), reviewList(code)]);
+    if (!detailState || detailState.code !== code) return;
+    detailState.feed = feed || detailState.feed; detailState.reviews = reviews || [];
+    if (fb.user && reviews.length) { try { detailState.helpfulSet = await reviewHelpfulSet(code, reviews.map(r => r.uid)); } catch {} }
+    communityLoaded = false;   // counts changed → refresh feed cards next time
+    renderDetail();
+  } catch {}
+}
+function shareDetailLink(f) {
+  const code = (f && f.code) || (detailState && detailState.code);
+  const link = location.origin + location.pathname + '?view=' + code;
+  if (navigator.share) navigator.share({ title: (f && f.title) || '社群行程', text: '看看這份行程！', url: link }).catch(() => {});
+  else if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => toast('已複製分享連結')).catch(() => toast(link));
+  else toast(link);
 }
 
 // ---- Account / Firebase ----
@@ -2465,6 +2599,9 @@ function init() {
     } else { openSettings(); }
   }));
   $('#plansSettingsBtn').addEventListener('click', openSettings);
+  // community plan detail page chrome
+  const dBack = $('#detailBack'); if (dBack) dBack.addEventListener('click', () => { showScreen('plans'); communityTab(true); });
+  const dShare = $('#detailShare'); if (dShare) dShare.addEventListener('click', () => { if (detailState) shareDetailLink(detailState.feed || { code: detailState.code }); });
   // 我的計劃 / 社群 segmented toggle
   $$('#plansSeg .plans-seg__btn').forEach(b => b.addEventListener('click', () => communityTab(b.dataset.seg === 'community')));
   // install / add to home screen
@@ -2599,7 +2736,7 @@ function init() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
   // firebase (guarded) + persist on exit
-  initFirebase().then(() => fb.onAuth(onAuthChange));
+  initFirebase().then(() => { fb.onAuth(onAuthChange); if (pendingView) { const v = pendingView; pendingView = null; openPlanDetail(v); } });
   window.addEventListener('beforeunload', () => { try { snapshotCurrent(); } catch {} });
 
   // initial screen: shared link → plans (loads into app); else app if returning, home if first time

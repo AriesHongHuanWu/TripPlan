@@ -500,6 +500,17 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
   </main>
 </section>
 
+<!-- ===== Community plan DETAIL page (read-only, deep-linkable ?plan=code) ===== -->
+<section id="screen-detail" class="screen" hidden>
+  <header class="appbar appbar--detail">
+    <button class="iconbtn" id="detailBack" title="返回"><svg><use href="#i-back"/></svg></button>
+    <div class="appbar__spacer"></div>
+    <button class="iconbtn" id="detailShare" title="分享"><svg><use href="#i-share"/></svg></button>
+  </header>
+  <main class="detail-main"><div id="detailRoot"></div></main>
+  <div class="detail-actionbar" id="detailActions"></div>
+</section>
+
 <div id="app">
   <!-- ===== App bar ===== -->
   <header class="appbar">
