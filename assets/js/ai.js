@@ -256,9 +256,32 @@ const TRIP_SCHEMA = {
     needInfo: { type: 'ARRAY', items: { type: 'OBJECT', properties: { key: { type: 'STRING' }, question: { type: 'STRING' }, hint: { type: 'STRING' } }, required: ['key', 'question'] } },
   },
 };
-// Parse a day count out of free text / answers ("7 天", "天數：10").
-function parseDays(s) { const m = String(s || '').match(/天數[：:]\s*(\d{1,4})/) || String(s || '').match(/(\d{1,4})\s*天/); return m ? Math.min(366, parseInt(m[1], 10)) : 0; }
-const CHUNK_DAYS = 6;    // days produced per Gemini call — small enough that each call is FAST and
+// Parse a day count out of free text / answers ("7 天", "天數：10", "7/1-7/5").
+function parseDays(s) { 
+  const str = String(s || '');
+  const m = str.match(/(?:天數|共|玩)[：:\s]*(\d{1,4})/) || str.match(/(\d{1,4})\s*[天日]/); 
+  if (m) return Math.min(366, parseInt(m[1], 10));
+  const zh = str.match(/(一|二|兩|三|四|五|六|七|八|九|十|十一|十二|十三|十四|十五)\s*[天日]/);
+  if (zh) {
+    const map = {'一':1,'二':2,'兩':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'十一':11,'十二':12,'十三':13,'十四':14,'十五':15};
+    return map[zh[1]];
+  }
+  const mo = str.match(/(一|半)[個]?(月)/);
+  if (mo) return mo[1] === '半' ? 15 : 30;
+  const dates = [];
+  const re = /(?:20\d\d[-/])?(\d{1,2})[-/](\d{1,2})/g;
+  let match;
+  while ((match = re.exec(str)) !== null) dates.push({ m: parseInt(match[1], 10), d: parseInt(match[2], 10) });
+  if (dates.length >= 2) {
+    const d1 = new Date(2024, dates[0].m - 1, dates[0].d);
+    let d2 = new Date(2024, dates[dates.length-1].m - 1, dates[dates.length-1].d);
+    if (d2 < d1) d2.setFullYear(2025);
+    const diff = Math.round((d2 - d1) / 86400000) + 1;
+    if (diff > 0 && diff <= 30) return diff;
+  }
+  return 0; 
+}
+const CHUNK_DAYS = 4;    // days produced per Gemini call — reduced to 4 to avoid free API quota timeouts/truncation.
                          // never truncates (so the heavy generate can't blow Cloudflare's ~100s 524).
 
 // One Gemini call. With `known` set it produces ONLY the next day-range (continuation);
@@ -309,9 +332,10 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {
   } else if (total > CHUNK_DAYS) {
     chunkNote = `\n\n【長行程・分批產生】本趟共 ${total} 天。cities/routes/pass/budget/packing/souvenirs/emergency 等「框架」請針對整趟 ${total} 天完整規劃；但 days 本次只先產生「第 ${dayFrom}–${dayTo} 天」（其餘天稍後分批補上）。`;
   }
+  const hasAnswers = answers && Object.keys(answers).length > 0;
   const userMsg = `使用者需求：「${(prompt || '').trim() || '(未提供文字，請依常見熱門選擇合理規劃並在 needInfo 詢問關鍵資訊)'}」`
     + (total ? `\n總天數：${total} 天。` : '')
-    + (answers && Object.keys(answers).length ? `\n使用者補充資訊：\n${Object.entries(answers).filter(([k]) => k !== '_skip').map(([k, v]) => `- ${k}：${v}`).join('\n')}${answers._skip ? '\n（使用者選擇略過提問，請用合理假設直接完成，不要再回傳 needInfo）' : ''}` : '');
+    + (hasAnswers ? `\n使用者補充資訊：\n${Object.entries(answers).filter(([k]) => k !== '_skip').map(([k, v]) => `- ${k}：${v}`).join('\n')}${answers._skip ? '\n（使用者選擇略過提問）' : ''}\n\n【重要指令】使用者已回覆部分問題，請「直接利用現有資訊排定行程」，大膽假設任何其餘缺漏的細節（若天數未明則預設為 5 天）。【絕對禁止】再次回傳 needInfo 進入迴圈，請務必直接產出完整行程 JSON！` : '');
   const data = await callGemini({
     system_instruction: { parts: [{ text: sys + chunkNote }] },
     contents: [{ role: 'user', parts: [{ text: userMsg }] }],
@@ -337,7 +361,8 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {
 // within the model's token budget. Returns { needInfo } or a full trip model. A chunk
 // failing mid-way (e.g. quota) keeps everything built so far — a usable, complete plan.
 export async function generateTripPlan({ prompt, answers, days, onProgress } = {}) {
-  const total = Math.max(0, days || parseDays(prompt) || (answers ? parseDays(Object.values(answers).join(' ')) : 0) || 0);
+  const parsedTotal = Math.max(0, days || parseDays(prompt) || (answers ? parseDays(Object.values(answers).join(' ')) : 0) || 0);
+  const total = (!parsedTotal && answers && Object.keys(answers).length > 0) ? 5 : parsedTotal;
   const first = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: total ? Math.min(total, CHUNK_DAYS) : 0 });
   if (first && first.needInfo && first.needInfo.length) return first;
   if (!first || !Array.isArray(first.days)) return first;
