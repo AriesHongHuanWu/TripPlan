@@ -995,7 +995,7 @@ main {
 
 /* ---- Desktop / landscape (≥1000px): left nav rail + wide content ---- */
 @media (min-width: 1000px) {
-  :root { --maxw: 1180px; }
+  :root { --maxw: 1240px; }
   #app:not([hidden]) {
     display: grid;
     grid-template-columns: 96px minmax(0, 1fr);
@@ -1004,7 +1004,15 @@ main {
     min-height: 100vh;
   }
   #app > .appbar { grid-area: topbar; }
-  #app > main { grid-area: content; padding: 22px 32px 48px; min-height: 0; }
+  #app > main { grid-area: content; padding: 22px 40px 48px; min-height: 0; }
+  /* Designed-for-desktop: center each tab in a comfortable column instead of stretching a phone.
+     Text/cards/chat read best in a contained width; the map page takes the full width. */
+  #page-today, #page-plan, #page-weather, #page-gift, #page-ai { max-width: 960px; margin: 0 auto; }
+  #page-route { max-width: 1120px; margin: 0 auto; }
+  /* AI tab: flex column that fills the content height so the chat composer is always on-screen
+     (the segment above the chat takes its own space; the chat fills the rest). */
+  #page-ai { display: flex; flex-direction: column; height: calc(100vh - var(--appbar-h) - 70px); min-height: 0; }
+  .chat-scroll { padding-inline: 4px; }
   #app > .tabbar {
     grid-area: side; position: sticky; top: 0; align-self: start;
     width: 96px; max-width: none; height: 100vh; left: auto; right: auto; bottom: auto; transform: none;
@@ -1014,11 +1022,15 @@ main {
   }
   #app > .tabbar .tab { flex: 0 0 auto; height: 66px; font-size: 11px; }
   #tabind { display: none; }
-  .chat-wrap { height: calc(100vh - var(--appbar-h) - 70px); }
+  .chat-wrap { max-width: 880px; margin-inline: auto; width: 100%; height: auto; flex: 1 1 auto; min-height: 0; }
   /* keep bottom sheets a sensible width on desktop */
   .sheet { max-width: 560px; }
-  /* let dense pages breathe into two columns on very wide screens */
-  .plans-main { max-width: 860px; }
+  /* Plans + community: a 2-column card grid on desktop (uses the width like a real desktop app) */
+  .plans-main { max-width: 1040px; }
+  #plansList, #templateList > div, #communityList .stagger { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  #plansList .plan-card, #communityList .plan-card { margin: 0; }
+  .plan-card--tpl, .plan-card--ai { margin-top: 0 !important; }   /* grid gap handles spacing */
+  .community-filters, .community-sort { max-width: 1040px; }
 }
 @media (min-width: 1400px) {
   .grid2 { gap: 16px; }
