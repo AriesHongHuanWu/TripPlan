@@ -9,8 +9,12 @@ import { t, getLang } from './i18n.js';
 
 const LS = { key: 'kp_gemini_key', model: 'kp_gemini_model', mode: 'kp_agent_on' };
 export function getCfg() {
+  const raw = localStorage.getItem(LS.key) || '';
+  // Allow MULTIPLE keys (comma / space / newline separated) → rotate on rate-limit.
+  const keys = raw.split(/[\s,;]+/).map(k => k.trim()).filter(Boolean);
   return {
-    key: localStorage.getItem(LS.key) || '',
+    key: keys[0] || '',          // back-compat: first key
+    keys,                        // all keys, for rotation
     model: localStorage.getItem(LS.model) || 'gemini-flash-latest',
   };
 }
@@ -143,27 +147,34 @@ async function execTool(call) {
 // ---- API call ----
 // Model aliases drift; if the configured model 404s we transparently retry with
 // known-good fallbacks so a stale model id never breaks the whole AI.
-const MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+const MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
 const modelMissing = (status, t) => status === 404 || /not\s*found|not\s*supported|unknown name|is not found|call ListModels/i.test(t || '');
 // Rate-limit / quota exhaustion (free-tier RPD/TPM). Different models often have
 // separate quota pools, so on 429 we try the next model before giving up.
 const isRateLimit = (status, t) => status === 429 || /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(t || '');
+const isBadKey = (status, t) => status === 401 || status === 403 || (status === 400 && /api.?key|API_KEY_INVALID|invalid.{0,8}key/i.test(t || ''));
 async function callGemini(payload) {
   const cfg = getCfg();
-  if (cfg.key) {
+  if (cfg.keys && cfg.keys.length) {
     const models = [cfg.model, ...MODEL_FALLBACKS].filter((m, i, a) => m && a.indexOf(m) === i);
     let lastErr = 'direct error', rate = false;
+    // MODEL-outer / KEY-inner: each better model is tried across EVERY key before
+    // degrading to the next model, so flash-lite is only used as a last resort.
     for (const m of models) {
-      let res;
-      try {
-        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.key }, body: JSON.stringify(payload) });
-      } catch (e) { throw new Error('無法連線到 AI（網路或瀏覽器阻擋）：' + (e && e.message || e)); }
-      if (res.ok) return res.json();
-      const t = await res.text();
-      lastErr = 'direct ' + res.status + ': ' + t.slice(0, 220);
-      if (isRateLimit(res.status, t)) { rate = true; continue; }   // quota hit — try another model's pool
-      if (!modelMissing(res.status, t)) break;                     // a real key/permission error — surface it
+      for (const key of cfg.keys) {
+        let res;
+        try {
+          res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(payload) });
+        } catch (e) { lastErr = '無法連線到 AI（網路或瀏覽器阻擋）：' + (e && e.message || e); continue; }
+        if (res.ok) return res.json();
+        const t = await res.text();
+        lastErr = 'direct ' + res.status + ': ' + t.slice(0, 220);
+        if (isRateLimit(res.status, t)) { rate = true; continue; }   // this key throttled → next key
+        if (modelMissing(res.status, t)) break;                      // stale alias → next model (no key fixes it)
+        if (isBadKey(res.status, t)) continue;                       // dud/blocked key → next key
+        throw new Error(lastErr);                                    // genuine error — surface it
+      }
     }
     throw new Error(rate ? 'RATE_LIMIT' : lastErr);
   }

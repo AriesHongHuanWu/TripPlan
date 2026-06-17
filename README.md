@@ -54,7 +54,7 @@
    - **Build command**：留空
    - **Build output directory**：`/`（根目錄）
 4. **Settings → Environment variables** 新增：
-   - `GEMINI_API_KEY` = 你的 Google AI Studio 金鑰（建議設為 **Secret**）
+   - `GEMINI_API_KEY` = 你的 Google AI Studio 金鑰（建議設為 **Secret**）。**可放多把**，用逗號分隔；某把達到額度上限（429）時伺服器會自動換下一把（`AI_API_KEY` 同義）。所有金鑰都受限時，會自動退到 **`gemini-flash-lite-latest`**（免費額度更高）當保底，AI 仍能回應。
    - `GEMINI_MODEL` = `gemini-flash-latest`（即 Gemini Flash 3.0；亦可填 `gemini-3.5-flash`）
 5. Deploy。`functions/api/gemini.js` 會自動成為 `/api/gemini`。
 

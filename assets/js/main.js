@@ -830,9 +830,10 @@ function openSettings() {
   // AI engine
   body.appendChild(el('.h-section', { text: 'AI 旅伴' }));
   body.appendChild(el('p', { class: 'tiny muted', style: { margin: '8px 0 12px', lineHeight: '1.6' }, text: '正式部署：在伺服器（Cloudflare Pages）設定 AI 服務金鑰即可，金鑰留在伺服器端、不外洩。本機測試可在此貼上你的金鑰改用瀏覽器直連。' }));
-  const keyIn = el('input', { type: 'password', value: cfg.key, placeholder: '貼上 API 金鑰（選填，本機直連用）', style: inputStyle() });
+  const keyIn = el('input', { type: 'password', value: localStorage.getItem('kp_gemini_key') || '', placeholder: '貼上 API 金鑰（可多把，用逗號分隔）', style: inputStyle() });
   body.appendChild(el('label', { class: 'tiny muted-3', text: 'AI 服務金鑰' }));
   body.appendChild(keyIn);
+  body.appendChild(el('.tiny.muted-3', { style: { marginTop: '4px', lineHeight: '1.6' }, text: '可貼多把金鑰（用逗號分隔）；某一把達到額度上限時會自動換下一把。' }));
   body.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '12px' }, onclick: () => {
     if (keyIn.value.trim()) localStorage.setItem('kp_gemini_key', keyIn.value.trim()); else localStorage.removeItem('kp_gemini_key');
     geminiCtl && geminiCtl.setModelLabel();
