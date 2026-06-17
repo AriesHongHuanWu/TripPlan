@@ -1359,7 +1359,7 @@ main {
 
 /* ---------- Craft polish: focus, press, view transitions ------------------ */
 /* Unified keyboard focus ring (accessibility + 'designed' feel) */
-:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: var(--focus-ring); }
 .iconbtn:focus-visible, .chip:focus-visible, .tab:focus-visible { border-radius: var(--r-pill); }
 /* Tactile press on interactive controls (Linear/Things feel) */
 .btn:active, .iconbtn:active, .chip--tap:active, .like-badge:active,
@@ -1444,3 +1444,15 @@ main {
 .switch-row__ico { font-size: 24px; flex: 0 0 auto; }
 .switch-row__body { flex: 1 1 auto; min-width: 0; }
 .switch-row__body b { display: block; font-size: var(--fs-15); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- a11y / polish from web-design-guidelines audit ---- */
+:root[data-theme="dark"]  { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+.gl-h1, .gl-h2, .gl-show__txt h3, .gl-cta h2, .gl-step h3, .gl-card h3 { text-wrap: balance; }
+.gl-lead, .gl-show__txt p { text-wrap: pretty; }
+.gl-section[id], #gl-top { scroll-margin-top: 80px; }
+/* signature/polish motion — reduced-motion-safe */
+@media (prefers-reduced-motion: no-preference) {
+  .gl-hero__bg { animation: glHeroDrift 18s ease-in-out infinite alternate; will-change: transform, opacity; }
+}
+@keyframes glHeroDrift { from { transform: translate3d(-2%,-1%,0) scale(1.03); opacity:.78; } to { transform: translate3d(2%,1.5%,0) scale(1.07); opacity:1; } }

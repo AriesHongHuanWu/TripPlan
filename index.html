@@ -2,7 +2,7 @@
 <html lang="zh-Hant" data-theme="light">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#0a0c12" media="(prefers-color-scheme: dark)" />
 <meta name="description" content="Plan AI — 用 AI 規劃、編輯與共享你的旅程：完整逐日行程、即時天氣、路線導航、預算與旅遊錦囊，並可匯出高品質 PDF 計畫表。" />
@@ -154,8 +154,8 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
         <div class="ai-create" id="homeAiCreate">
           <div class="ai-create__head"><span class="ai-create__spark"><svg class="ic"><use href="#i-ai"/></svg></span><b>用 AI 規劃一趟旅程</b></div>
           <div class="ai-create__field">
-            <textarea id="homeAiInput" rows="1" placeholder="想去哪、玩幾天？例如：5 天東京自由行，7/10 出發"></textarea>
-            <button class="send-btn" id="homeAiBtn" title="開始規劃"><svg><use href="#i-send"/></svg></button>
+            <textarea id="homeAiInput" rows="1" aria-label="描述你的旅程 / Describe your trip" placeholder="想去哪、玩幾天？例如：5 天東京自由行，7/10 出發"></textarea>
+            <button class="send-btn" id="homeAiBtn" title="開始規劃" aria-label="開始規劃 / Start planning"><svg aria-hidden="true"><use href="#i-send"/></svg></button>
           </div>
           <div class="ai-create__chips" id="homeAiChips"></div>
         </div>
@@ -320,7 +320,7 @@ window.addEventListener('appinstalled', function () { window.__bip = null; });</
           <h2 class="gl-h2">和其他服務比一比</h2>
           <p class="gl-lead">把 AI 生成、地圖、天氣、預算、共編與匯出整合在一個免費 App。</p>
         </div>
-        <div class="gl-table-wrap reveal">
+        <div class="gl-table-wrap reveal" tabindex="0" role="region" aria-label="服務功能比較 / Feature comparison">
           <table class="gl-table">
             <thead>
               <tr>
@@ -730,7 +730,7 @@ import { t, getLang, setLang } from './assets/js/i18n.js';
     var tb = document.getElementById('glTheme');
     if (tb) { tb.innerHTML = ICONS[m]; tb.title = t('theme.tooltip', { name: NAME(m) }); }
     var segs = document.querySelectorAll('#glThemeSeg button');
-    for (var i = 0; i < segs.length; i++) segs[i].classList.toggle('on', segs[i].getAttribute('data-theme-set') === m);
+    for (var i = 0; i < segs.length; i++) { var on = segs[i].getAttribute('data-theme-set') === m; segs[i].classList.toggle('on', on); segs[i].setAttribute('aria-pressed', String(on)); }
   }
   function apply(m) {
     localStorage.setItem('kp_thememode', m);
@@ -750,7 +750,7 @@ import { t, getLang, setLang } from './assets/js/i18n.js';
     var l = getLang();
     var lb = document.getElementById('glLang');
     if (lb) lb.textContent = (l === 'en' ? 'EN' : '中');
-    document.querySelectorAll('#glLangSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-lang-set') === l); });
+    document.querySelectorAll('#glLangSeg button').forEach(function (b) { var on = b.getAttribute('data-lang-set') === l; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
   }
   var langBtn = document.getElementById('glLang');
   if (langBtn) langBtn.addEventListener('click', function () { setLang(getLang() === 'en' ? 'zh' : 'en'); });
@@ -785,11 +785,44 @@ import { t, getLang, setLang } from './assets/js/i18n.js';
   // safety net: never leave landing content permanently hidden if the reveal observer fails
   setTimeout(function () { var r = document.querySelectorAll('#screen-home .reveal:not(.in)'); for (var i = 0; i < r.length; i++) r[i].classList.add('in'); }, 1600);
 
-  document.querySelectorAll('#glFaq .gl-faq__q').forEach(function (q) {
-    q.setAttribute('aria-expanded', 'false');
+  // ---- Signature moment: the hero AI box "types" example trips (the product's thesis) ----
+  (function () {
+    var ta = document.getElementById('homeAiInput');
+    if (!ta || reduceMotion) return;
+    var EX = {
+      zh: ['5 天東京自由行，7/10 出發', '6 天巴黎，想多看美術館', '4 天首爾美食之旅', '九州 8 天溫泉巡禮', '義大利 10 天，羅馬進米蘭出'],
+      en: ['5 days in Tokyo, departing 7/10', '6 days in Paris, lots of museums', '4-day Seoul food trip', '8 days of onsen across Kyushu', '10 days in Italy, Rome in, Milan out']
+    };
+    var base = { zh: '想去哪、玩幾天？例如：', en: 'Where to and for how long? e.g. ' };
+    var idx = 0, ch = 0, typing = true, paused = false, timer = null;
+    function L() { return getLang() === 'en' ? 'en' : 'zh'; }
+    function tick() {
+      if (paused) { timer = setTimeout(tick, 700); return; }
+      var l = L(), list = EX[l], ex = list[idx % list.length];
+      if (typing) {
+        ch++; ta.setAttribute('placeholder', base[l] + ex.slice(0, ch) + '▍');
+        if (ch >= ex.length) { typing = false; timer = setTimeout(tick, 1500); return; }
+        timer = setTimeout(tick, 52);
+      } else {
+        ch--; ta.setAttribute('placeholder', base[l] + ex.slice(0, Math.max(0, ch)) + '▍');
+        if (ch <= 0) { typing = true; idx++; timer = setTimeout(tick, 320); return; }
+        timer = setTimeout(tick, 26);
+      }
+    }
+    ta.addEventListener('focus', function () { paused = true; ta.setAttribute('placeholder', base[L()] + EX[L()][0]); });
+    ta.addEventListener('blur', function () { paused = false; });
+    window.addEventListener('kp-lang-changed', function () { ch = 0; typing = true; });
+    timer = setTimeout(tick, 700);
+  })();
+
+  document.querySelectorAll('#glFaq .gl-faq__q').forEach(function (q, i) {
+    var a = q.nextElementSibling, aid = 'gl-faq-a-' + i;
+    a.id = aid; a.setAttribute('aria-hidden', 'true');
+    q.setAttribute('aria-expanded', 'false'); q.setAttribute('aria-controls', aid);
     q.addEventListener('click', function () {
-      var item = q.parentElement, a = q.nextElementSibling, open = item.classList.toggle('open');
+      var open = q.parentElement.classList.toggle('open');
       q.setAttribute('aria-expanded', open ? 'true' : 'false');
+      a.setAttribute('aria-hidden', open ? 'false' : 'true');
       a.style.maxHeight = open ? (a.scrollHeight + 'px') : '0px';
     });
   });
@@ -807,7 +840,17 @@ import { t, getLang, setLang } from './assets/js/i18n.js';
   function closeLegal() { if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); modal.dataset.docKey = ''; if (lastFocus && lastFocus.focus) lastFocus.focus(); } }
   document.querySelectorAll('[data-legal]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); closeMenu(); openLegal(a.getAttribute('data-legal')); }); });
   document.querySelectorAll('[data-legal-close]').forEach(function (b) { b.addEventListener('click', closeLegal); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLegal(); });
+  document.addEventListener('keydown', function (e) {
+    if (!modal || !modal.classList.contains('open')) return;
+    if (e.key === 'Escape') { closeLegal(); return; }
+    if (e.key === 'Tab') {
+      var f = modal.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])');
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
 })();
 </script>
 </body>
