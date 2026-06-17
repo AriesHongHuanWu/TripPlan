@@ -1248,6 +1248,20 @@ function updateAppbarTitle() {
     : (TRIP.start && TRIP.end ? fmtRange(TRIP.start, TRIP.end) : '尚未規劃 · 問 AI 幫你排');
 }
 function updatePlanCount() { const c = $('#planCountChip'); if (c) c.textContent = `${DAYS.length} 天`; }
+// Quick plan switcher (tap the app-bar title) — switch trips without leaving the planner.
+function openPlanSwitcher() {
+  $('#sheetTitle').textContent = '切換計劃';
+  const b = clear($('#sheetBody'));
+  const metas = plansMeta();
+  if (!metas.length) b.appendChild(el('.tiny.muted-3', { text: '還沒有任何計劃。' }));
+  metas.forEach(m => b.appendChild(el('.switch-row' + (m.id === currentPlanId ? '.is-current' : ''), { onclick: () => { closeSheets(); if (m.id !== currentPlanId) openPlan(m.id); } }, [
+    el('.switch-row__ico', { text: m.emoji || '🗺️' }),
+    el('.switch-row__body', {}, [el('b', { text: m.title }), el('.tiny.muted-3', { text: m.id === currentPlanId ? '目前開啟中' : '更新 ' + fmtAgo(m.updatedAt) })]),
+    m.id === currentPlanId ? el('span.chip', { text: '✓' }) : null,
+  ])));
+  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '14px' }, onclick: () => { closeSheets(); snapshotCurrent(); showScreen('plans'); } }, [icon('i-grid'), '我的計劃（全部・新建）']));
+  openSheet('sheet');
+}
 function deletePlan(id) {
   let arr = plansMeta().filter(p => p.id !== id); setPlansMeta(arr);
   try { localStorage.removeItem('kp_state:' + id); localStorage.removeItem('kp_base:' + id); } catch {}
@@ -2221,16 +2235,25 @@ async function renderCommunity(forceReload = false) {
 
   if (!communityLoaded || forceReload) {
     const myReq = ++communityReq;   // claim this load; a newer load supersedes us
-    listWrap.appendChild(el('.tiny.muted-3', { style: { textAlign: 'center', padding: '26px' }, text: '載入社群行程中…' }));
+    // Stale-while-revalidate: paint what we already have first; else show skeletons (feels instant).
+    if (communityCache.length) { buildCommunityFilters(filtersHost); paintCommunityList(); }
+    else { for (let i = 0; i < 4; i++) listWrap.appendChild(skeletonCard()); }
     try {
       const list = await feedList(60);
-      const liked = fb.user ? await feedLikedSet(list.map(f => f.code).filter(Boolean)) : new Set();
       if (myReq !== communityReq || communityMode === false) return;   // superseded / toggled away
+      const liked = fb.user ? await feedLikedSet(list.map(f => f.code).filter(Boolean)) : new Set();
+      if (myReq !== communityReq || communityMode === false) return;
       communityCache = list; communityLiked = liked; communityLoaded = true;
     } catch (e) { console.warn('community load', e); if (myReq !== communityReq) return; }
   }
   buildCommunityFilters(filtersHost);
   paintCommunityList();
+}
+function skeletonCard() {
+  return el('.skel-card', {}, [
+    el('.skeleton.skel-ico'),
+    el('.skel-lines', {}, [el('.skeleton.skel-line.w70'), el('.skeleton.skel-line.w45'), el('.skeleton.skel-line.w90')]),
+  ]);
 }
 function buildCommunityFilters(host) {
   if (!host) return; clear(host);
@@ -2576,6 +2599,9 @@ function init() {
   $$('.tab').forEach(t => t.addEventListener('click', () => goTab(t.dataset.tab)));
   // app bar buttons
   $('#themeBtn').addEventListener('click', () => { setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); });
+  // tap the app-bar title to quick-switch plans
+  const appBrand = document.querySelector('#app .appbar__brand');
+  if (appBrand) { appBrand.setAttribute('role', 'button'); appBrand.setAttribute('aria-label', '切換計劃'); appBrand.addEventListener('click', openPlanSwitcher); }
   $('#settingsBtn').addEventListener('click', openSettings);
   $('#locBtn').addEventListener('click', () => requestLocation(false));
   $('#searchBtn').addEventListener('click', openSearch);

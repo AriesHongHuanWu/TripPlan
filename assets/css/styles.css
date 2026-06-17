@@ -101,6 +101,9 @@
 /* ---------- Reset --------------------------------------------------------- */
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; -webkit-tap-highlight-color: transparent; }
+/* The `hidden` attribute must ALWAYS win — otherwise a class like .chat-wrap{display:flex}
+   overrides it and hidden panels (e.g. 同行聊天) render on top of / below the visible one. */
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -1407,3 +1410,23 @@ main {
 /* community card footer (avatar + author + social stats) */
 .community-card__foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 .community-card__social { margin-left: auto; }
+
+/* ---------- Skeleton loading cards (perceived speed) ---------------------- */
+.skel-card { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 12px; background: var(--surface); }
+.skel-ico { width: 48px; height: 48px; border-radius: 14px; flex: 0 0 auto; }
+.skel-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
+.skel-line { height: 12px; border-radius: var(--r-xs); }
+.skel-line.w70 { width: 70%; } .skel-line.w45 { width: 45%; } .skel-line.w90 { width: 90%; }
+
+/* ---------- Plan switcher (tappable app-bar title) ------------------------ */
+#app .appbar__brand { cursor: pointer; border-radius: var(--r-md); }
+#app .appbar__brand:active { transform: var(--press); }
+.appbar__title-row { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.appbar__title-row .appbar__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.switch-caret { opacity: .45; font-size: 12px; flex: 0 0 auto; }
+.switch-row { display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: var(--r-md); cursor: pointer; }
+.switch-row:hover { background: var(--surface-2); }
+.switch-row.is-current { background: color-mix(in srgb, var(--brand-2) 8%, var(--surface)); }
+.switch-row__ico { font-size: 24px; flex: 0 0 auto; }
+.switch-row__body { flex: 1 1 auto; min-width: 0; }
+.switch-row__body b { display: block; font-size: var(--fs-15); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
