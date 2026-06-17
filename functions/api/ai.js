@@ -12,10 +12,10 @@
 // rotate to the next key; across the model fallbacks too (separate quota pools).
 // You can also use AI_API_KEYS / GEMINI_API_KEYS for the list explicitly.
 
-// Order = best→safest. flash-lite has a MUCH larger free quota, so it sits 2nd: the moment the
-// primary flash is rate-limited we jump straight to lite (instead of wasting calls on the other
-// flash tiers that share the same low free quota). The remaining tiers are extra safety nets.
-const MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
+// Default = Flash Lite (fast + much larger free quota → fewest 429/524). MODELS[0] is the default
+// when no AI_MODEL/GEMINI_MODEL env is set. The bigger flash models are only deeper fallbacks.
+// To pin an exact build, set GEMINI_MODEL (e.g. gemini-3.1-flash-lite) — it's tried before these.
+const MODELS = ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
 const missing = (s, t) => s === 404 || /not found|not supported|unknown name|call ListModels/i.test(t || '');
 const rateLimited = (s, t) => s === 429 || /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(t || '');
 // Google answers 503 / UNAVAILABLE / "model overloaded" when a (free-tier) model is busy — transient,

@@ -55,7 +55,7 @@
    - **Build output directory**：`/`（根目錄）
 4. **Settings → Environment variables** 新增：
    - `GEMINI_API_KEY` = 你的 Google AI Studio 金鑰（建議設為 **Secret**）。**可放多把**，用逗號分隔；某把達到額度上限（429）時伺服器會自動換下一把（`AI_API_KEY` 同義）。所有金鑰都受限時，會自動退到 **`gemini-flash-lite-latest`**（免費額度更高）當保底，AI 仍能回應。
-   - `GEMINI_MODEL` = `gemini-flash-latest`（即 Gemini Flash 3.0；亦可填 `gemini-3.5-flash`）
+   - `GEMINI_MODEL` =（**選填**）模型 ID。**留空即可**——程式預設用 **`gemini-flash-lite-latest`**(永遠指向最新的 Flash Lite,速度快、免費額度高、最不會 429/524)。若要**釘死特定版本**(例如 `gemini-3.1-flash-lite`)再填這個變數,伺服器會優先用它、失敗才退回 `gemini-flash-lite-latest`。
 5. Deploy。`functions/api/gemini.js` 會自動成為 `/api/gemini`。
 
 ### 方法 B：Wrangler CLI
