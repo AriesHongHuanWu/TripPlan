@@ -72,7 +72,7 @@ const CONTROL_TOOLS = [
   { name: 'open_google_maps', description: '在新分頁開啟 Google 地圖。單點用 query；路線用 origin+destination（預設大眾運輸）。', parameters: { type: 'object', properties: { query: { type: 'string' }, origin: { type: 'string' }, destination: { type: 'string' }, mode: { type: 'string', enum: ['transit', 'walking', 'driving'] } } } },
   { name: 'show_souvenirs', description: '開啟伴手禮分頁並顯示某城市。', parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] } },
   { name: 'find_hotels', description: '在 Google 地圖開啟某地點附近的飯店（含即時房價），用於沿途找住宿。', parameters: { type: 'object', properties: { place: { type: 'string', description: '景點或車站名' } }, required: ['place'] } },
-  { name: 'add_activity', description: '在行程某天新增一個活動。', parameters: { type: 'object', properties: { day: { type: 'integer', description: '第幾天 1–8' }, time: { type: 'string', description: 'HH:MM 24小時制' }, title: { type: 'string' }, type: { type: 'string', enum: ['see', 'eat', 'shop', 'move', 'stay'] }, desc: { type: 'string' } }, required: ['day', 'time', 'title'] } },
+  { name: 'add_activity', description: '在行程某天新增一個活動。若為知名地點，請一併提供真實的 lat/lng 以便在地圖標點。', parameters: { type: 'object', properties: { day: { type: 'integer', description: '第幾天 1–8' }, time: { type: 'string', description: 'HH:MM 24小時制' }, title: { type: 'string' }, type: { type: 'string', enum: ['see', 'eat', 'shop', 'move', 'stay'] }, desc: { type: 'string' }, lat: { type: 'number', description: '緯度（確知才填，不確定就留空）' }, lng: { type: 'number', description: '經度（同上）' } }, required: ['day', 'time', 'title'] } },
   { name: 'remove_activity', description: '刪除某天的某個活動（以名稱比對）。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' } }, required: ['day', 'title'] } },
   { name: 'update_activity', description: '修改某天某活動的時間/名稱/備註。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' }, newTime: { type: 'string' }, newTitle: { type: 'string' }, desc: { type: 'string' } }, required: ['day', 'title'] } },
   { name: 'move_activity', description: '把某活動移到另一天/時間。', parameters: { type: 'object', properties: { day: { type: 'integer' }, title: { type: 'string' }, toDay: { type: 'integer' }, time: { type: 'string' } }, required: ['day', 'title', 'toDay'] } },
@@ -80,6 +80,7 @@ const CONTROL_TOOLS = [
   { name: 'remove_day', description: '刪除第 N 天（其後天數會自動往前遞補）。', parameters: { type: 'object', properties: { day: { type: 'integer', description: '第幾天，從 1 起算' } }, required: ['day'] } },
   { name: 'reset_plan', description: '把目前行程還原成原始規劃。', parameters: { type: 'object', properties: {} } },
   { name: 'plan_trip', description: '從零規劃一整趟全新行程（任何國家），並套用到目前開啟的計劃。當使用者要你「規劃/安排一趟去某地、玩幾天」的行程時呼叫。', parameters: { type: 'object', properties: { request: { type: 'string', description: '盡量完整的需求：目的地、天數或起訖日期、出發地/機場、班機時間、偏好（美食/親子/節奏）等' } }, required: ['request'] } },
+  { name: 'new_plan', description: '建立一個全新的空白計劃並開啟（之後可請 AI 規劃或手動編輯）。當使用者要「開一個新行程/新計劃」時呼叫。', parameters: { type: 'object', properties: { title: { type: 'string', description: '新計劃名稱，可省略' } } } },
 ];
 
 function resolveCity(name = '') {
@@ -157,6 +158,7 @@ const isBadKey = (status, t) => status === 401 || status === 403 || (status === 
 const isOverloaded = (status, t) => status === 503 || /overloaded|unavailable|try again later/i.test(t || '');
 async function callGemini(payload) {
   const cfg = getCfg();
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('OFFLINE');   // skip the full timeout when clearly offline
   if (cfg.keys && cfg.keys.length) {
     const models = [cfg.model, ...MODEL_FALLBACKS].filter((m, i, a) => m && a.indexOf(m) === i);
     let lastErr = 'direct error', rate = false, busy = false;
@@ -302,7 +304,7 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {
   if (known) {
     const cityList = (known.cities || []).map(c => `${c.key}=${c.name}`).join('、');
     const lastDate = (known.days && known.days.length) ? known.days[known.days.length - 1].date : (known.trip && known.trip.start) || '';
-    chunkNote = `\n\n【延續產生】整趟共 ${total} 天，前面天數已排好。本次只產生「第 ${dayFrom}–${dayTo} 天」的 days，延續前面的城市、路線與節奏。可沿用既有城市 key：${cityList || '（無）'}。若這幾天去到新城市，請在 cities 補上新城市（key 不可與既有重複）並在 routes 補上往返路段、在 souvenirs 補上特產。days 第一天日期請接在「${lastDate}」之後，逐日遞增。trip/pass/budget/packing/emergency 可省略；本次重點是 days（與必要的新 cities/routes/souvenirs）。`;
+    chunkNote = `\n\n【延續產生】整趟共 ${total} 天，前面天數已排好。本次只產生「第 ${dayFrom}–${dayTo} 天」的 days，延續前面的城市、路線與節奏。可沿用既有城市 key：${cityList || '（無）'}。若這幾天去到新城市，請在 cities 補上新城市（key 不可與既有重複）並在 routes 補上往返路段、在 souvenirs 補上特產。days 第一天日期請接在「${lastDate}」之後，逐日遞增。trip/pass/budget/packing/emergency 可省略；本次重點是 days（與必要的新 cities/routes/souvenirs）。本次禁止回傳 needInfo，請直接以合理假設完成這幾天。`;
   } else if (total > CHUNK_DAYS) {
     chunkNote = `\n\n【長行程・分批產生】本趟共 ${total} 天。cities/routes/pass/budget/packing/souvenirs/emergency 等「框架」請針對整趟 ${total} 天完整規劃；但 days 本次只先產生「第 ${dayFrom}–${dayTo} 天」（其餘天稍後分批補上）。`;
   }
@@ -312,14 +314,20 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {
   const data = await callGemini({
     system_instruction: { parts: [{ text: sys + chunkNote }] },
     contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, responseMimeType: 'application/json', responseSchema: TRIP_SCHEMA },
+    // 16384 = room for the whole framework + a 6-day chunk (8192 truncated rich trips → MAX_TOKENS).
+    // thinkingBudget:0 stops 2.5/3 "thinking" tokens from eating the budget (ignored by older models).
+    generationConfig: { temperature: 0.7, maxOutputTokens: 16384, responseMimeType: 'application/json', responseSchema: TRIP_SCHEMA, thinkingConfig: { thinkingBudget: 0 } },
   });
-  const cand = data.candidates && data.candidates[0];
+  // Distinguish the real failure mode so the user gets an actionable message (not a generic parse error).
+  if (!data.candidates || !data.candidates.length) { throw new Error(data.promptFeedback && data.promptFeedback.blockReason ? 'BLOCKED' : 'BUSY'); }
+  const cand = data.candidates[0];
+  const fr = cand && cand.finishReason;
+  if (fr === 'SAFETY' || fr === 'RECITATION') throw new Error('BLOCKED');
   const text = ((cand && cand.content && cand.content.parts) || []).filter(p => p.text).map(p => p.text).join('').trim();
   let obj = null;
   try { obj = JSON.parse(text); }
   catch { const m = text.match(/\{[\s\S]*\}/); if (m) { try { obj = JSON.parse(m[0]); } catch {} } }
-  if (!obj) throw new Error(t('ai.gen.err.parse'));
+  if (!obj) throw new Error(fr === 'MAX_TOKENS' ? 'TRUNCATED' : t('ai.gen.err.parse'));
   return obj;
 }
 
@@ -385,11 +393,18 @@ async function turn(scroll) {
       const msg = e.message === 'NO_KEY' ? t('ai.err.noKey')
         : e.message === 'RATE_LIMIT' ? '⚠️ AI 用量已達上限（配額／速率限制）。請稍等一兩分鐘再試；若經常發生，可到 Google AI Studio 確認方案與配額，或在「設定」改用自己的 API 金鑰。'
         : e.message === 'BUSY' ? '⚠️ AI 模型暫時忙線／過載（與金鑰無關），請稍等幾秒再送一次即可。'
+        : e.message === 'OFFLINE' ? '⚠️ 目前似乎沒有網路連線，請連上網路後再試。'
         : t('ai.err.connect') + e.message;
       addAI(scroll, msg);
-      return;
+      return false;   // signal failure so send() can roll back the dangling turn (avoid wedging the chat)
     }
-    const cand = data.candidates && data.candidates[0];
+    // Prompt-level block returns NO candidates (only promptFeedback) — handle before deref.
+    if (!data.candidates || !data.candidates.length) {
+      typing.remove();
+      addAI(scroll, (data.promptFeedback && data.promptFeedback.blockReason) ? t('ai.err.safety') : t('ai.err.noReply'));
+      return false;
+    }
+    const cand = data.candidates[0];
     const parts = (cand && cand.content && cand.content.parts) || [];
     const calls = parts.filter(p => p.functionCall).map(p => p.functionCall);
 
@@ -397,6 +412,9 @@ async function turn(scroll) {
       // record the model turn EXACTLY as returned — preserves `thoughtSignature` on
       // functionCall parts, which Gemini 3 requires to be echoed back (else 400).
       history.push({ role: 'model', parts: cand.content.parts });
+      // Show any lead-in sentence the model returned alongside the tool call (else it feels terse).
+      const lead = parts.filter(p => p.text).map(p => p.text).join('').trim();
+      if (lead) { typing.before(el('.msg.msg--ai', { html: mdLite(lead) })); scroll.scrollTop = scroll.scrollHeight; }
       const responses = [];
       for (const c of calls) {
         const { label, result } = await execTool(c);
@@ -411,15 +429,19 @@ async function turn(scroll) {
 
     // text reply
     typing.remove();
+    const fr = cand && cand.finishReason;
     const text = parts.filter(p => p.text).map(p => p.text).join('').trim()
-      || (cand && cand.finishReason === 'SAFETY' ? t('ai.err.safety') : t('ai.err.noReply'));
+      || (fr === 'SAFETY' ? t('ai.err.safety')
+        : fr === 'MAX_TOKENS' ? '回覆過長被截斷，請換個說法或縮小範圍再試一次。'
+        : t('ai.err.noReply'));
     history.push({ role: 'model', parts: (cand && cand.content && cand.content.parts) || [{ text }] });
     addAI(scroll, text);
     if (planChanged && API && API.notifyAI) API.notifyAI(t('ai.msg.notifyTitle'), text.replace(/\s+/g, ' ').slice(0, 60));
-    return;
+    return true;
   }
   typing.remove();
   addAI(scroll, t('ai.msg.done'));
+  return false;   // tool loop exhausted with no final reply → drop the exchange so the chat doesn't wedge
 }
 
 function addAI(scroll, text) {
@@ -436,9 +458,15 @@ async function send(scroll, input) {
   if (!text || busy) return;
   busy = true; input.value = ''; input.style.height = 'auto';
   addUser(scroll, text);
+  const base = history.length;                 // snapshot BEFORE this exchange
   history.push({ role: 'user', parts: [{ text }] });
-  if (history.length > 40) history = history.slice(-40);
-  try { await turn(scroll); } finally { busy = false; }
+  try {
+    const ok = await turn(scroll);
+    // A failed/incomplete turn must NOT leave a dangling user/functionResponse turn in history,
+    // or the NEXT message hits Gemini's "two consecutive user turns" 400 and the chat wedges.
+    if (!ok) history.length = base;
+    else if (history.length > 40) history = history.slice(-40);
+  } finally { busy = false; }
 }
 
 const SUGGESTIONS = [
