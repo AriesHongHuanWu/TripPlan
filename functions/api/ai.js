@@ -42,18 +42,33 @@ export async function onRequestPost({ request, env }) {
   const models = [preferred, ...MODELS].filter((m, i, a) => m && a.indexOf(m) === i);
   let lastStatus = 502, lastText = JSON.stringify({ error: 'all keys/models failed' });
 
+  // Time budgets so we ALWAYS answer before Cloudflare's ~100s edge timeout (524):
+  const startedAt = Date.now();
+  const TOTAL_BUDGET_MS = 85000;   // overall — leave headroom under the 524 cutoff
+  const PER_CALL_MS = 28000;       // abort a single slow Gemini call and fall back (flash-lite is faster)
+
   // MODEL-outer / KEY-inner: try each (better) model across EVERY key before degrading
   // to the next model — so flash-lite (last in MODELS) is only used once every key has
   // exhausted the stronger flash models.
   for (const model of models) {
     for (const KEY of KEYS) {              // spread load across all keys for this model
+      if (Date.now() - startedAt > TOTAL_BUDGET_MS) {   // out of time → graceful "busy" (client retries)
+        return json({ error: 'AI is busy right now (timed out). Please try again in a moment.', busy: true }, 503);
+      }
       let up;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), PER_CALL_MS);
       try {
         up = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY }, body }
+          { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY }, body, signal: ctrl.signal }
         );
-      } catch (e) { return json({ error: 'Upstream fetch failed: ' + String(e) }, 502); }
+      } catch (e) {                                     // timeout/abort or network → transient, try next key/model
+        clearTimeout(timer);
+        lastStatus = 503; lastText = JSON.stringify({ error: 'upstream timeout/abort', busy: true });
+        continue;
+      }
+      clearTimeout(timer);
       const text = await up.text();
       if (up.ok) return out(text, 200);
       lastStatus = up.status; lastText = text;

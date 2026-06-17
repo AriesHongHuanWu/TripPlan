@@ -255,7 +255,8 @@ const TRIP_SCHEMA = {
 };
 // Parse a day count out of free text / answers ("7 天", "天數：10").
 function parseDays(s) { const m = String(s || '').match(/天數[：:]\s*(\d{1,4})/) || String(s || '').match(/(\d{1,4})\s*天/); return m ? Math.min(366, parseInt(m[1], 10)) : 0; }
-const CHUNK_DAYS = 14;   // days produced per Gemini call (keeps each call within token budget)
+const CHUNK_DAYS = 6;    // days produced per Gemini call — small enough that each call is FAST and
+                         // never truncates (so the heavy generate can't blow Cloudflare's ~100s 524).
 
 // One Gemini call. With `known` set it produces ONLY the next day-range (continuation);
 // otherwise it produces the full framework + the first day-range.
@@ -311,7 +312,7 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known } = {
   const data = await callGemini({
     system_instruction: { parts: [{ text: sys + chunkNote }] },
     contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 32768, responseMimeType: 'application/json', responseSchema: TRIP_SCHEMA },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 8192, responseMimeType: 'application/json', responseSchema: TRIP_SCHEMA },
   });
   const cand = data.candidates && data.candidates[0];
   const text = ((cand && cand.content && cand.content.parts) || []).filter(p => p.text).map(p => p.text).join('').trim();
