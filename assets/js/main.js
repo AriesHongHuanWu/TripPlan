@@ -1437,6 +1437,8 @@ async function buildCurrentTrip(text, answers, titleHint) {
       ? '尚未設定 AI 金鑰。請到「設定」貼上你的 API 金鑰，或部署後在伺服器設定金鑰。'
       : e.message === 'RATE_LIMIT'
       ? 'AI 用量已達上限（配額／速率限制）。請稍等一兩分鐘再試，或在「設定」改用自己的 API 金鑰。'
+      : e.message === 'BUSY'
+      ? 'AI 模型暫時忙線／過載（這跟金鑰無關）。請稍等幾秒再按一次「建立」，通常重試就會成功。'
       : '建立行程時連線發生問題：' + e.message;
     appDialog({ title: 'AI 暫時無法建立行程', message: m + '\n\n已先幫你建立一份空白行程，可稍後在「旅伴」用聊天重試，或手動編輯。', confirmText: '前往旅伴', cancelText: '知道了' }).then(go => { if (go) goTab('ai'); });
     return;

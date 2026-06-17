@@ -18,6 +18,9 @@
 const MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
 const missing = (s, t) => s === 404 || /not found|not supported|unknown name|call ListModels/i.test(t || '');
 const rateLimited = (s, t) => s === 429 || /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(t || '');
+// Google answers 503 / UNAVAILABLE / "model overloaded" when a (free-tier) model is busy — transient,
+// so retry on the next model/key (e.g. flash-lite) instead of surfacing it as a hard failure.
+const overloaded = (s, t) => s === 503 || /overloaded|unavailable|try again later/i.test(t || '');
 const badKey = (s, t) => s === 401 || s === 403 || (s === 400 && /api.?key|API_KEY_INVALID|invalid.{0,8}key/i.test(t || ''));
 const parseKeys = v => (v || '').split(/[\s,;]+/).map(k => k.trim()).filter(Boolean);
 
@@ -55,6 +58,7 @@ export async function onRequestPost({ request, env }) {
       if (up.ok) return out(text, 200);
       lastStatus = up.status; lastText = text;
       if (rateLimited(up.status, text)) continue;   // this key throttled for this model → next key
+      if (overloaded(up.status, text)) continue;    // model busy/overloaded → try next key, then next model (flash-lite)
       if (missing(up.status, text)) break;          // model alias gone → no key fixes it → next model
       if (badKey(up.status, text)) continue;        // dud/blocked key → next key
       return out(text, up.status);                  // genuine request/server error → surface

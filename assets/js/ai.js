@@ -153,11 +153,13 @@ const modelMissing = (status, t) => status === 404 || /not\s*found|not\s*support
 // separate quota pools, so on 429 we try the next model before giving up.
 const isRateLimit = (status, t) => status === 429 || /RESOURCE_EXHAUSTED|quota|rate.?limit|too many requests/i.test(t || '');
 const isBadKey = (status, t) => status === 401 || status === 403 || (status === 400 && /api.?key|API_KEY_INVALID|invalid.{0,8}key/i.test(t || ''));
+// 503 / UNAVAILABLE / "model overloaded" = transient busy → retry on the next model/key (flash-lite).
+const isOverloaded = (status, t) => status === 503 || /overloaded|unavailable|try again later/i.test(t || '');
 async function callGemini(payload) {
   const cfg = getCfg();
   if (cfg.keys && cfg.keys.length) {
     const models = [cfg.model, ...MODEL_FALLBACKS].filter((m, i, a) => m && a.indexOf(m) === i);
-    let lastErr = 'direct error', rate = false;
+    let lastErr = 'direct error', rate = false, busy = false;
     // MODEL-outer / KEY-inner: each better model is tried across EVERY key before
     // degrading to the next model, so flash-lite is only used as a last resort.
     for (const m of models) {
@@ -171,19 +173,23 @@ async function callGemini(payload) {
         const t = await res.text();
         lastErr = 'direct ' + res.status + ': ' + t.slice(0, 220);
         if (isRateLimit(res.status, t)) { rate = true; continue; }   // this key throttled → next key
+        if (isOverloaded(res.status, t)) { busy = true; continue; }  // model overloaded → next key/model (flash-lite)
         if (modelMissing(res.status, t)) break;                      // stale alias → next model (no key fixes it)
         if (isBadKey(res.status, t)) continue;                       // dud/blocked key → next key
         throw new Error(lastErr);                                    // genuine error — surface it
       }
     }
-    throw new Error(rate ? 'RATE_LIMIT' : lastErr);
+    throw new Error(rate ? 'RATE_LIMIT' : busy ? 'BUSY' : lastErr);
   }
   let res;
   try { res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
   catch (e) { throw new Error('無法連線到伺服器：' + (e && e.message || e)); }
   if (!res.ok) {
     const t = await res.text();
-    if (res.status === 503 || res.status === 404 || res.status === 405 || /GEMINI_API_KEY/i.test(t)) throw new Error('NO_KEY');
+    // Only a genuinely missing server key / undeployed function is NO_KEY. Google ALSO answers 503
+    // (UNAVAILABLE / "model overloaded") when a free-tier model is busy — that must NOT look like "no key".
+    if (res.status === 404 || res.status === 405 || /key not set on the server|AI key not set|GEMINI_API_KEY/i.test(t)) throw new Error('NO_KEY');
+    if (res.status === 503 || /overloaded|unavailable|try again later/i.test(t)) throw new Error('BUSY');
     if (isRateLimit(res.status, t)) throw new Error('RATE_LIMIT');
     throw new Error('proxy ' + res.status + ': ' + t.slice(0, 220));
   }
@@ -377,6 +383,7 @@ async function turn(scroll) {
       typing.remove();
       const msg = e.message === 'NO_KEY' ? t('ai.err.noKey')
         : e.message === 'RATE_LIMIT' ? '⚠️ AI 用量已達上限（配額／速率限制）。請稍等一兩分鐘再試；若經常發生，可到 Google AI Studio 確認方案與配額，或在「設定」改用自己的 API 金鑰。'
+        : e.message === 'BUSY' ? '⚠️ AI 模型暫時忙線／過載（與金鑰無關），請稍等幾秒再送一次即可。'
         : t('ai.err.connect') + e.message;
       addAI(scroll, msg);
       return;
