@@ -1465,7 +1465,7 @@ function hideGenProgress() { clearInterval(genTimer); const o = document.getElem
 // (a 略過 button always builds anyway), so this nudges without ever blocking. The plan
 // already exists by the time this shows, so submit builds INTO it (no duplicate plan).
 let pendingAnswers = null;
-function askTripInfo(text, needInfo, prev, titleHint) {
+function askTripInfo(text, needInfo, prev, titleHint, askCount) {
   $('#sheetTitle').textContent = '再補幾項，AI 排得更準';
   const b = clear($('#sheetBody'));
   b.appendChild(el('p', { class: 'muted', style: { fontSize: '14px' }, text: '看起來還缺一些資訊。補上以下任一項會讓行程更貼近你，也可以直接略過讓 AI 幫你決定：' }));
@@ -1478,9 +1478,9 @@ function askTripInfo(text, needInfo, prev, titleHint) {
   b.appendChild(el('button.btn.btn--brand.btn--block', { style: { marginTop: '16px' }, onclick: () => {
     const answers = { ...(prev || {}) };
     inputs.forEach(([k, inp]) => { if (inp.value.trim()) answers[k] = inp.value.trim(); });
-    closeSheets(); buildCurrentTrip(text, answers, titleHint);
+    closeSheets(); buildCurrentTrip(text, answers, titleHint, (askCount || 0) + 1);
   } }, [icon('i-ai'), '開始建立行程']));
-  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => { closeSheets(); buildCurrentTrip(text, { ...(prev || {}), _skip: true }, titleHint); } }, ['略過，直接幫我安排']));
+  b.appendChild(el('button.btn.btn--block', { style: { marginTop: '8px' }, onclick: () => { closeSheets(); buildCurrentTrip(text, { ...(prev || {}), _skip: true }, titleHint, (askCount || 0) + 1); } }, ['略過，直接幫我安排']));
   openSheet('sheet');
 }
 
@@ -1501,12 +1501,13 @@ function aiCreatePlan(text, titleHint, answers, preQuestions) {
 }
 // Generate the trip into the CURRENT (already-created) plan, with a visible overlay,
 // chunk progress for long trips, programmatic needInfo, and recoverable errors.
-async function buildCurrentTrip(text, answers, titleHint) {
+async function buildCurrentTrip(text, answers, titleHint, askCount) {
+  askCount = askCount || 0;
   const t = (text || '').trim(); if (!t) return;
   showGenProgress('AI 正在規劃你的行程…');
   let res;
   try {
-    res = await generateTripPlan({ prompt: t, answers, onProgress: (built, total) => {
+    res = await generateTripPlan({ prompt: t, answers, noAsk: askCount >= 2 || !!(answers && answers._skip), onProgress: (built, total) => {
       const gt = document.getElementById('genTitle');
       if (gt && total > 14) gt.textContent = `規劃中… 已完成 ${built}/${total} 天`;
     } });
@@ -1529,9 +1530,9 @@ async function buildCurrentTrip(text, answers, titleHint) {
     return;
   }
   hideGenProgress();
-  if (res && res.needInfo && res.needInfo.length) { askTripInfo(t, res.needInfo, answers, titleHint); return; }
+  if (res && res.needInfo && res.needInfo.length && askCount < 2) { askTripInfo(t, res.needInfo, answers, titleHint, askCount); return; }
   const r = applyModel(res);
-  if (!r || r.ok === false) appDialog({ title: 'AI 這次沒排好，再試一次？', message: '有時候是模型忙線或回應不完整。大多數情況再試一次就會成功；或改用「旅伴」聊天慢慢排。', confirmText: '再試一次', cancelText: '改用聊天' }).then(retry => { if (retry) buildCurrentTrip(text, answers, titleHint); else goTab('ai'); });
+  if (!r || r.ok === false) appDialog({ title: 'AI 這次沒排好，再試一次？', message: '有時候是模型忙線或回應不完整。大多數情況再試一次就會成功；或改用「旅伴」聊天慢慢排。', confirmText: '再試一次', cancelText: '改用聊天' }).then(retry => { if (retry) buildCurrentTrip(text, { ...(answers || {}), _skip: true }, titleHint, askCount + 1); else goTab('ai'); });
   else { const built = (res.days || []).length, want = parseInt((titleHint || '').match(/(\d+)\s*日\s*$/)?.[1] || '0', 10); toast(want && built < want ? `✨ 已先排好前 ${built} 天（其餘可稍後續排）` : '✨ 行程建立完成！'); }
 }
 function homeAiCreate(text) { const t = (text || '').trim(); if (!t) return; aiCreatePlan(t); }

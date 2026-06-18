@@ -361,18 +361,22 @@ async function genTripCall({ prompt, answers, total, dayFrom, dayTo, known, forc
 // the content stays COMPLETE even for very long itineraries (up to a year), each call
 // within the model's token budget. Returns { needInfo } or a full trip model. A chunk
 // failing mid-way (e.g. quota) keeps everything built so far — a usable, complete plan.
-export async function generateTripPlan({ prompt, answers, days, onProgress } = {}) {
+export async function generateTripPlan({ prompt, answers, days, onProgress, noAsk } = {}) {
   const parsedTotal = Math.max(0, days || parseDays(prompt) || (answers ? parseDays(Object.values(answers).join(' ')) : 0) || 0);
   const total = (!parsedTotal && answers && Object.keys(answers).length > 0) ? 5 : parsedTotal;
   const day1to = total ? Math.min(total, CHUNK_DAYS) : 0;
   let first = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: day1to });
-  if (first && first.needInfo && first.needInfo.length) return first;
+  if (first && first.needInfo && first.needInfo.length) {
+    if (!noAsk) return first;            // first round → let the caller ask the questions (one batch)
+    // noAsk = the user already answered: NEVER ask again. Force a real plan instead of looping.
+    first = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: day1to, force: true });
+  }
   // Weak models (esp. the flash-lite default) sometimes return valid JSON with an
   // empty/missing days array. Retry once, forcefully, before giving up — far better
   // than dead-ending the user with "行程內容不足".
   if (!first || !Array.isArray(first.days) || !first.days.length) {
     const retry = await genTripCall({ prompt, answers, total, dayFrom: 1, dayTo: day1to, force: true });
-    if (retry && retry.needInfo && retry.needInfo.length) return retry;
+    if (retry && retry.needInfo && retry.needInfo.length && !noAsk) return retry;
     if (retry && Array.isArray(retry.days)) first = retry;
   }
   if (!first || !Array.isArray(first.days)) return first;
